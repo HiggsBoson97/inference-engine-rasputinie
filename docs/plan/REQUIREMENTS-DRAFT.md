@@ -17,6 +17,31 @@ A caution on evidence quality, stated once: several "HARD" items live in `GLOSSA
 
 ---
 
+## 0. Owner directives — round 2, 2026-10-22
+
+Recorded the turn they were given. These override the items below wherever they conflict, and each names what it supersedes.
+
+| ID | Directive | Supersedes |
+|---|---|---|
+| **O1** | **Weight formats: GGUF *and* safetensors, both in scope.** The engine is not a GGUF-only engine. | ADR 0003 cl.1 names GGUF as *the* weight format. **Open sub-question:** which safetensors precision is first-class — see O1a. |
+| **O1a** | The safetensors precision question is forced by arithmetic: 27B in bf16 is **51.77 GiB** and does not fit 40 GB, while the FP8 checkpoint is 28.8 GiB and does fit. "safetensors support" therefore means FP8 safetensors, or bf16 with offload, or a quantised safetensors format. Unresolved; owner decision pending. | — |
+| **O2** | **The objective is bandwidth efficiency.** tok/s is a measurement of how well bandwidth is being spent — never a target. No session count, no concurrency target, no per-session floor. | The "8 sessions at 32K" recommendation, the "105 tok/s ceiling" as a planning figure, and the Q3 framing. |
+| **O3** | **Card-specific only.** Portability is a non-goal. The engine is built for one machine and every decision is derived from that machine. | The orchestrator's proposal to "build card-agnostic at batch 1" — withdrawn by its author. |
+| **O4** | **The PCIe link is a design opportunity, not a limit.** Take full advantage of the two-card interconnect without saturating it; treat constraints as the thing to engineer around. Strata is cited as a model of this stance. | Any framing of "no peer DMA" as a ceiling rather than a design input. |
+| **O5** | **The engine contains only what this machine needs.** Bloat is a defect, not a baseline. The owner expects the final engine to be well under 1 GB. | The inherited assumption that an inference engine is a large artifact. |
+| **O6** | **Runtime adaptivity is an open design axis**: an engine that adapts to workload and remaining hardware headroom dynamically rather than executing a static schedule. To be evaluated on evidence, not adopted or rejected by taste. | — |
+| **O7** | **Correctness is required, and its measurement must itself be designed.** A 32-token greedy match is an arbiter, not the whole method. | The unexamined assumption that "correct" is self-evident. |
+
+**Corrections to the record recorded at the same time**
+
+- **Bandwidth is three numbers, not one.** 800 GB/s is the specification; **619 GB/s is the measured read wall** (`00-facts.md:197`); **472 GB/s is what one bf16 GEMM shape achieved** (`research/20:131`). Only the second is a wall. Real headroom above 472 is +31%, not +69%.
+- **This box has no compute-bound regime.** At 86.4 TFLOP/s, compute can absorb 0.398 GB/token; one sequence at 8K context already reads 0.537 GB/token of KV. Compute-vs-bandwidth crosses at batch 91 at 4K context and **never** at 8K or above. Bandwidth is the only currency at every concurrency this machine will run.
+- **O2 is arithmetic, not philosophy**: aggregate tokens/s = b·B/(w + b·kv) is strictly increasing in b, so no batch size maximises it. Batch is capped only by VRAM, latency and TTFT.
+
+**Repository reset, executed 2026-10-22:** root commit `b74d457` — pristine sglang `d0a7565`, 11,063 files under `engine/`, 302 files in `srt/models` (the previous HEAD had 0). Public. Host re-cloned clean. The documents that carried the wrong directives (`02-plan.md`, `MAP.md`, `GLOSSARY.md`, `HANDOFF.md`) were not carried; this file and the evidence tree were.
+
+---
+
 ## 1. Machine and topology
 
 **R1 — The engine is built for exactly one machine, `rasputin`, and is allowed to assume its exact hardware.** **HARD.**
