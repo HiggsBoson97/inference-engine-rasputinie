@@ -1,10 +1,10 @@
 # AGENTS.md — operating rules for this repo
 
 `rasputinie` is a local inference engine built for exactly one machine, `rasputin`.
-It runs two target models — Qwen3.8-27B (`qwen3_5`, 48 gated-deltanet + 16
-full-attention layers) and Qwen3.8-Flash-Next (`qwen4_exp`, 512-expert top-10
-MoE) — faster than a general-purpose runtime by assuming this hardware and
-nothing else.
+It runs exactly one model — Qwen3.8-27B (`qwen3_5`, 48 gated-deltanet + 16
+full-attention layers), from the `ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` IQ3_S
+file with its MTP head — faster than a general-purpose runtime by assuming this
+hardware and nothing else.
 Correctness is proven against a torch reference, speed against a measured
 baseline: no claim ships without a number.
 
