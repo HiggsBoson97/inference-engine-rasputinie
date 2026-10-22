@@ -53,7 +53,7 @@ position of record.
 
 ## Wayfinding operations
 
-This repo's map is in-file: [`MAP.md`](../../MAP.md), a wayfinder map whose
+This repo's map is in-file: [MAP.md (removed)](../../MAP.md (removed)), a wayfinder map whose
 tickets are decisions rather than build steps. Resolve a ticket by appending to
 its `## Decisions so far` table in that same file, in the same commit as the
 evidence. Publish a map as an issue (`.scratch`-free, GitHub-native) only when

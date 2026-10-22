@@ -21,7 +21,7 @@
 
 ### 1.1 Bytes per token
 
-The model keeps KV in 16 of 64 layers (`LLLF` × 16), 4 KV heads, head_dim 256 (`docs/01-models.md:19`).
+The model keeps KV in 16 of 64 layers (`LLLF` × 16), 4 KV heads, head_dim 256 (`docs/01-models.md`).
 
 `16 layers × 4 heads × 256 dim × 2 tensors (K,V) = 32,768 elements per token`
 
@@ -38,13 +38,13 @@ The model keeps KV in 16 of 64 layers (`LLLF` × 16), 4 KV heads, head_dim 256 (
 | KVQuant nuq3 + 1% outliers | 3.33 | 13.3 | 0.42 | 1.66 | 3.33 | 0.21 |
 | KIVI-2 g32 (+8 MiB fp16 window) | 3.0 | 12.0 | 0.38 | 1.50 | 3.00 | 0.19 |
 
-Arithmetic is spec-derived. Sanity check against measurement: the FP8 baseline recorded 45,727 tokens in **1.40 GB** of bf16 KV (`docs/00-facts.md:152-153`) **[measured]**. Note what that number can and cannot be. 45,727 tokens × 64 KiB/token is 2.86 GiB = 3.07 GB in total across both cards, which is **1.53 GB per card**; 1.40 GB as a *total* would imply 30.6 bytes per token, which is arithmetically impossible for 16 layers × 4 heads × 256 dim × K and V × 2 bytes. **So `1.40 GB` is the per-card pool**, and 1.53 vs 1.40 is the log's rounding plus non-uniform head allocation across the two cards. The 64 KiB/token figure stands, and the record's own label ("total") is the thing that is loose, not the arithmetic. Worth a correction banner per the standing rule that a measurement beats a document.
+Arithmetic is spec-derived. Sanity check against measurement: the FP8 baseline recorded 45,727 tokens in **1.40 GB** of bf16 KV (`docs/00-facts.md`) **[measured]**. Note what that number can and cannot be. 45,727 tokens × 64 KiB/token is 2.86 GiB = 3.07 GB in total across both cards, which is **1.53 GB per card**; 1.40 GB as a *total* would imply 30.6 bytes per token, which is arithmetically impossible for 16 layers × 4 heads × 256 dim × K and V × 2 bytes. **So `1.40 GB` is the per-card pool**, and 1.53 vs 1.40 is the log's rounding plus non-uniform head allocation across the two cards. The 64 KiB/token figure stands, and the record's own label ("total") is the thing that is loose, not the arithmetic. Worth a correction banner per the standing rule that a measurement beats a document.
 
 Note the q8_0 penalty: 8.5 bpw, not 8.0, because of the f16 block scale. **On this model q8_0 costs 34 KiB/token against fp8's 32 — and fp8 is not available as a compute format on gfx1100 at all** (ADR 0003 `:7-10`, no FP8 matrix instruction). Storing fp8 would mean a conversion on every read with no compute benefit and fewer mantissa bits than int8 provides. q8_0 strictly dominates fp8 here. ADR 0003 `:41-42` already says this; the arithmetic confirms it.
 
 ### 1.2 Bandwidth: the crossover is at 180K resident tokens
 
-Per card under TP=2 the KV read is **32 KiB per token of context**. The weight read at IQ3_S is 5.48 GiB/card (`docs/00-facts.md:114`, 10.96 GiB total).
+Per card under TP=2 the KV read is **32 KiB per token of context**. The weight read at IQ3_S is 5.48 GiB/card (`docs/00-facts.md`, 10.96 GiB total).
 
 `5.48 GiB ÷ 32 KiB = 179,568 tokens`
 
@@ -59,7 +59,7 @@ Per card under TP=2 the KV read is **32 KiB per token of context**. The weight r
 
 Consequences, and they invert the intuitive ordering:
 
-1. **At batch 1 and 32K, q8 KV is worth 8%.** Do not build it as a speed optimisation. The 857 ms/token baseline is 36× below the memory wall (`docs/00-facts.md:160`), so an 8% traffic saving is lost in the noise of a defect that is not yet explained.
+1. **At batch 1 and 32K, q8 KV is worth 8%.** Do not build it as a speed optimisation. The 857 ms/token baseline is 36× below the memory wall (`docs/00-facts.md`), so an 8% traffic saving is lost in the noise of a defect that is not yet explained.
 2. **At the target 8 × 32K, q8 is worth 39%.** And it is worth that only after the weight path is fixed; before that, both numbers are hypothetical.
 3. **Session count is where q8 actually pays**, and that is §1.3.
 
@@ -97,7 +97,7 @@ Everything below is a per-token cost for *this* shape. "Kernel cost" means work 
 | **q8_0** | K and V, 32-elem blocks, f16 scale along head_dim | 34 KiB | **+0.0002 PPL** on a 0.6B Qwen3 [claimed], and essentially exact on 4B/8B-class models in the same thread. Uniformly reported as transparent. | one `f16` scale per 32 elems; dequant to bf16 then WMMA; 8 blocks per head, block-aligned (`256 % 32 = 0`). Flash-decode must fuse the dequant. | **low.** The intended ADR target. Needs its own measurement because no admissible number exists on a hybrid Qwen3.5 (§5). |
 | q8 K / **q4_0 V** | V at 4.5 bpw, K at 8.5 | 26 KiB | K is the sensitive tensor at every bit-width: K4V4 and K8V4 both land near the K4V8 point, i.e. **V can be cut to 4 bits once K is 8** [claimed, QuaRot tbl. and the K/V ablation in §2.1] | two block layouts in one kernel; V dequant on the P·V path | **low-medium.** −24% bytes for a measured-small cost. The one sub-8-bit step worth an experiment. |
 | q5_1 / q5_0 | K and V, 32-elem, f16 scale + f16 min | 24 / 22 KiB | 5-bit is *not* a safe middle: the q5 results in the only modern-model sweep are mixed, with one model showing a catastrophic 4.5× PPL blowup at q5_1 that the same run did not show at q8 [claimed] | same block shape as q8_0 plus a bias term | **medium.** q5 is the awkward point — more kernel work than q8, no clear quality story. Skip. |
-| q4_1 / q4_0 | K and V, 4-bit | 20 / 18 KiB | +0.04 PPL on Llama-2-7B K4V4 (5.51 vs 5.47) [claimed, QuaRot]; the damage is concentrated in K | 4-bit unpack + scale; no integer dot available (only via inline asm, `docs/00-facts.md:189-192`) | **high.** Buys 2.1 GiB/card over q8 at 8×32K and costs 4 K-bits. |
+| q4_1 / q4_0 | K and V, 4-bit | 20 / 18 KiB | +0.04 PPL on Llama-2-7B K4V4 (5.51 vs 5.47) [claimed, QuaRot]; the damage is concentrated in K | 4-bit unpack + scale; no integer dot available (only via inline asm, `docs/00-facts.md`) | **high.** Buys 2.1 GiB/card over q8 at 8×32K and costs 4 K-bits. |
 | **KIVI-2** | K per-channel (g32 tokens), V per-token, + fp16 window R=128 | 12 KiB + 8 MiB fixed | LongBench Llama-3-8B avg 44.37 vs 45.21 fp16 [claimed, authors]; **but** the only third-party long-context check puts passkey retrieval at 0.68–0.76 vs 1.00 fp16 [claimed, KVQuant's baseline table] | per-channel scales sit on the QKᵀ reduction axis — the awkward case; quantise/dequantise groups before the matmul; the fp16 residual window means two code paths | **high.** A recall regression that short-context PPL does not see. |
 | **KVQuant** | K per-channel **pre-RoPE**, V per-token, NUQ LUT, 1% fp16 outliers, sink tokens | 13.3 KiB @ 3.33 bpw | best quality-per-bit in the literature: Llama-3-8B 5.64 vs 5.54 at 3-bit [claimed]; +0.10 PPL | heaviest of all: per-model Fisher/k-means calibration, per-layer LUT matvec, balanced sparse matvec, RoPE fused into the K matvec, CUDA-only, no HIP port | **very high.** Multi-week port to recover 1.5 GiB. Not defensible now. |
 | **QAQ** | per-token, **variable** bit-width chosen from an attention-error bound | ~7.5× compression | "under 1% accuracy drop" — **but the paper's tables omit the fp16 baseline**, so the claim cannot be checked [claimed] | needs a CPU-resident fp16 mirror and per-step re-quantisation; bit allocation depends on live attention scores | **disqualifying.** Incompatible with a paged, append-only, prefix-shareable cache. |
@@ -119,7 +119,7 @@ The mechanism is not subtle: K is what the query multiplies to produce the atten
 
 ### 2.2 A note specific to `partial_rotary_factor: 0.25`
 
-Only 64 of 256 key channels are rotated; 192 carry position-invariant per-channel statistics (`docs/01-models.md:20`) **[documented]**. Every per-channel K scheme (KIVI, KVQuant) is *easier* on this model than on a fully-rotated one, because the channel statistics it relies on are not smeared by RoPE. This is a genuine architectural advantage — and it is also why KVQuant's "quantise K before RoPE" trick would be partly redundant here, removing its main justification.
+Only 64 of 256 key channels are rotated; 192 carry position-invariant per-channel statistics (`docs/01-models.md`) **[documented]**. Every per-channel K scheme (KIVI, KVQuant) is *easier* on this model than on a fully-rotated one, because the channel statistics it relies on are not smeared by RoPE. This is a genuine architectural advantage — and it is also why KVQuant's "quantise K before RoPE" trick would be partly redundant here, removing its main justification.
 
 The cheap version of the same idea, worth one experiment and no more: store the 192 unrotated channels at q4 and the 64 rotated ones at q8. K falls from 17.4 KiB to ~10 KiB per token, saving 7 KiB/token. It needs two block layouts in one kernel and is a ~1 GiB/card win at 8×32K. Interesting, not urgent, and **unmeasurable until the weight path is fixed.**
 
@@ -131,9 +131,9 @@ This is the part of the question where the architecture, not the literature, is 
 
 ### 3.1 What the state is
 
-Per layer the GDN state is a running outer-product accumulator of shape `[n_v_heads, k_dim, v_dim] = [48, 128, 128]`, from 16 key heads broadcast to 48 value heads (`docs/01-models.md:19`) **[documented]**.
+Per layer the GDN state is a running outer-product accumulator of shape `[n_v_heads, k_dim, v_dim] = [48, 128, 128]`, from 16 key heads broadcast to 48 value heads (`docs/01-models.md`) **[documented]**.
 
-`48 layers × 48 × 128 × 128 × 4 B = 150,994,944 B = 151 MB` — plus ~8 MB conv1d window state, so **159 MB per sequence** (`docs/01-models.md:38-42`).
+`48 layers × 48 × 128 × 128 × 4 B = 150,994,944 B = 151 MB` — plus ~8 MB conv1d window state, so **159 MB per sequence** (`docs/01-models.md`).
 
 | dtype | Per sequence | 8 sessions | 12 sessions |
 |---|---|---|---|
@@ -179,7 +179,7 @@ Three conclusions, in order of confidence:
 
 ### 3.3 Why this is the real multi-session lever
 
-The plan's P4 scope already includes "recurrent-state checkpointing so a prefix hit can be resumed" (`docs/02-plan.md:84-87`). Without it, the radix cache on this model is a KV-only win on a model where — at 8K — KV is only 3× the state, and at 2K the state is *larger than the KV span it accompanies*:
+The plan's P4 scope already includes "recurrent-state checkpointing so a prefix hit can be resumed" (02-plan.md (removed)). Without it, the radix cache on this model is a KV-only win on a model where — at 8K — KV is only 3× the state, and at 2K the state is *larger than the KV span it accompanies*:
 
 | Checkpoint interval | State cost | KV cost | State as % of the KV it accompanies |
 |---|---|---|---|
@@ -312,11 +312,11 @@ Stated so a future session can overturn the recommendation with evidence rather 
 
 | Claim | Status | Source |
 |---|---|---|
-| KV is 64 KiB/token, 2/8/16 GiB at 32K/128K/256K | **[documented]** config-derived | `docs/01-models.md:19,36-37`; recomputed here |
-| 1.40 GB bf16 KV at 45,727 tokens; 2.08 GB free/card; `max_running_requests=3` | **[measured]** | `docs/00-facts.md:152-153` |
-| Weight read 5.48 GiB/card at IQ3_S TP=2 | **[documented]** | `docs/00-facts.md:114` (11.76 GB / 10.96 GiB total) |
-| Decode is 36× below the memory wall | **[measured]** | `docs/00-facts.md:160` |
-| gfx1100 has no FP8 matrix instruction; no integer dot except via inline asm | **[measured]** | `docs/00-facts.md:189-192`; ADR 0003 `:7-10` |
+| KV is 64 KiB/token, 2/8/16 GiB at 32K/128K/256K | **[documented]** config-derived | `docs/01-models.md,36-37`; recomputed here |
+| 1.40 GB bf16 KV at 45,727 tokens; 2.08 GB free/card; `max_running_requests=3` | **[measured]** | `docs/00-facts.md` |
+| Weight read 5.48 GiB/card at IQ3_S TP=2 | **[documented]** | `docs/00-facts.md` (11.76 GB / 10.96 GiB total) |
+| Decode is 36× below the memory wall | **[measured]** | `docs/00-facts.md` |
+| gfx1100 has no FP8 matrix instruction; no integer dot except via inline asm | **[measured]** | `docs/00-facts.md`; ADR 0003 `:7-10` |
 | KV dtype surface in sglang is bf16/fp8_e4m3/fp8_e5m2 — q8 is engine work, not a flag | **[documented]** | `mem_cache/kv_cache_dtype.py:14-19` |
 | Radix eviction is leaf-only; a parent is evictable only when its last child is gone and `lock_ref == 0` | **[documented]** | `mem_cache/radix_cache.py:552-580`; `evict_policy.py`; `choices.py:187` |
 | SGLang stores cached GDN state as int8 per-(head,k-channel), conv at native dtype, with the fp8-vs-int8 and single-rounding argument | **[documented]** | `mem_cache/mamba_checkpoint_pool.py:15-45`, read on disk |

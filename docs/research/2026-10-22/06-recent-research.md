@@ -10,7 +10,7 @@
 | **[D]** | Opened by a delegated extraction pass that returned the abstract text; URL and date checked, full text not re-read here. |
 | **[U]** | Could not verify. Do not cite outside this document. |
 
-Two claims in this document are load-bearing and are *not* citations, they are arithmetic: the KV-versus-weight crossover (§1) and the concurrency ceiling it implies. Both are derived from `docs/01-models.md:36-42` and `docs/00-facts.md:10-12`. If either input is wrong, both conclusions move.
+Two claims in this document are load-bearing and are *not* citations, they are arithmetic: the KV-versus-weight crossover (§1) and the concurrency ceiling it implies. Both are derived from `docs/01-models.md` and `docs/00-facts.md`. If either input is wrong, both conclusions move.
 
 **Relationship to the other documents in this directory.** `01`, `02`, `04`, `05` and `07` are topic deep-dives written in parallel with this survey; this file is the external-literature layer that sits above them and defers to them on verdicts. Where they overlap, they agree, and they were derived independently: §1's arithmetic reproduces `04-kv-cache.md` §1.2 (a 59.3 % KV share at 8×32K, and q8_0 strictly dominating fp8 on this chip) and `05-serving-knobs.md` §1 ("long-context decode on this box is a KV problem, not a weight problem"). Where `02-megakernels.md` concludes *do not build a megakernel*, this document does not argue: a.5 explains why the idea keeps winning elsewhere, and P-B is scoped so that it survives `02`'s verdict rather than depending on overturning it.
 
@@ -34,7 +34,7 @@ bytes(B, L) = 11.77 GB (IQ3_S weights)  +  B × L × 64 KiB   (bf16 KV, 16 atten
 | 8 | 32K | bf16 | 28.95 GB | 46.8 | 21.4 | 171 | **59 %** |
 | 8 | 32K | q8 | 20.36 GB | 32.9 | 30.4 | 243 | 42 % |
 
-Read the last two rows against `docs/02-plan.md:38-42` ("~28 GiB of free VRAM holds about 13 sessions at 32K"), which assumes a free-VRAM figure that `docs/00-facts.md:154` contradicts (2.08 GB free per card). **At bf16 KV, eight 32K sessions need 16 GiB of KV plus 10.96 GiB of weights — 26.96 GiB on a 19.98 GiB card. They do not fit.** At q8 KV the same eight sessions need 8 GiB of KV, so 10.96 + 8 + 1.24 GiB of recurrent state = **20.20 GiB — still 0.2 GiB over the card**, before any workspace, graph pool or activation buffer. The realistic one-card ceiling at 32K q8 is **~6 sessions**, not 13.
+Read the last two rows against 02-plan.md (removed) ("~28 GiB of free VRAM holds about 13 sessions at 32K"), which assumes a free-VRAM figure that `docs/00-facts.md` contradicts (2.08 GB free per card). **At bf16 KV, eight 32K sessions need 16 GiB of KV plus 10.96 GiB of weights — 26.96 GiB on a 19.98 GiB card. They do not fit.** At q8 KV the same eight sessions need 8 GiB of KV, so 10.96 + 8 + 1.24 GiB of recurrent state = **20.20 GiB — still 0.2 GiB over the card**, before any workspace, graph pool or activation buffer. The realistic one-card ceiling at 32K q8 is **~6 sessions**, not 13.
 
 Cross-check, because this table is the one thing here that could be wrong in a way that matters: `04-kv-cache.md` §1.2 derives the identical 59.3 % KV share from the per-card TP=2 split (8 GiB of KV against 5.48 GiB of weights), and `05-serving-knobs.md` §1 reaches the same conclusion from a different direction — the compute/bandwidth crossover. Three independent derivations, one answer.
 
@@ -181,7 +181,7 @@ Absent from gfx11 and central to every 2025 kernel. Ada-MK's entire 50 % shared-
 
 The economic premise of DistServe/Splitwise/Mooncake/Dynamo/llm-d is a fleet with cheap inter-node KV movement and per-phase parallelism plans. On two PCIe cards with no P2P:
 - Any PD split needs **two resident copies of the model**. bf16 twins are 100 GB — impossible. IQ3_S twins are 21.9 GiB of weights and do fit in 40 GB, so the split is physically possible; the cost is that decode then runs on **one** card (DP-per-phase), i.e. at the single-card 619 GB/s wall, and the ×1.5–1.8 that TP=2 would have bought at decode (`docs/research/18-tp-roccl.md:293-295`) is forfeited. PD here is a bet that prefill interference costs more than that forfeit.
-- The handoff itself: a 32K q8 KV is 1 GiB, so ≈70 ms at the measured 14.2 GiB/s host-bounce rate (`docs/00-facts.md:13-14`) — about two decode steps at batch 8, per request, on a link that is also carrying the display. `R3` still holds: treat it as host traffic, not P2P.
+- The handoff itself: a 32K q8 KV is 1 GiB, so ≈70 ms at the measured 14.2 GiB/s host-bounce rate (`docs/00-facts.md`) — about two decode steps at batch 8, per request, on a link that is also carrying the display. `R3` still holds: treat it as host traffic, not P2P.
 - **Net:** PD on this box is a throughput *trade*, not a throughput win, and it is measurable in one afternoon. The only 2026 paper whose *mechanism* fits two devices is FluidPD (in-place worker role swap, 2 Oct 2026, +94.6 pp SLO attainment) — and it still assumes two resident replicas. **[D]** arXiv:2610.06917; Mooncake **[D]** FAST'25 best paper https://www.usenix.org/conference/fast25/presentation/qin; DistServe **[D]** OSDI'24; llm-d v1.0 **[D]** 20 Oct 2026 https://llm-d.ai/blog/llm-d-v1.0-state-of-the-art-inference-ready-for-day-2
 
 ### b.5 Cluster-scale KV management and routing
@@ -261,7 +261,7 @@ Nothing in 2025–26 lifts the ceiling for an autoregressive 27B on 619 GB/s. Th
 
 **C-6. UDNA's matrix ISA.** No public ISA reference as of 2026-10-22; only LLVM targets (`gfx1310`/`amdgpu13`). Whether it keeps WMMA or moves to the CDNA MFMA model is unpriceable. **[V]** LLVM AMDGPUUsage.
 
-**C-7. DeepInfer.** DeepSeek open-sourced its production engine on **21 Oct 2026** (Apache-2.0, NVIDIA + Huawei) — one day before this document. Not read here. Its grouped-expert `psum` layout was already assessed as irrelevant to a dense model (`research/12-deepinfer.md`), but the open-sourcing may change what is inspectable. **[U]**
+**C-7. DeepInfer.** DeepSeek open-sourced its production engine on **21 Oct 2026** (Apache-2.0, NVIDIA + Huawei) — one day before this document. Not read here. Its grouped-expert `psum` layout was already assessed as irrelevant to a dense model (a donor report (removed)), but the open-sourcing may change what is inspectable. **[U]**
 
 **C-8. Items I could not verify.**
 - **SHEPHERD** (SLO-aware LLM serving, widely attributed to NSDI'25): **no arXiv record and nothing in the NSDI'25 programme. Do not cite.** **[U]**

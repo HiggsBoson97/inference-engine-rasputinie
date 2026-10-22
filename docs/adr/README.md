@@ -11,5 +11,5 @@ in `docs/agents/domain/decisions/<chapter>.md`, which carries confidence and
 rejected alternatives; the ADR is written once it settles. Numbers come from
 `docs/00-facts.md` and `bench/results/`, never from a specification. The pre-loop
 records in `docs/decisions/` — `0001`, the exclusion decision — predate this
-directory and stay where `HANDOFF.md` and `MAP.md` point at them; new decisions
+directory and stay where `HANDOFF.md` and MAP.md (removed) point at them; new decisions
 land here.

@@ -77,7 +77,7 @@ by `gh`. See `docs/agents/issue-tracker.md`.
 ### Domain docs
 
 Single-context: numbered `docs/adr/` plus a decision record. A root
-`GLOSSARY.md` is created with the SPEC, not before. See `docs/agents/domain.md`.
+`GLOSSARY.md (removed)` is created with the SPEC, not before. See `docs/agents/domain.md`.
 
 ### Build loop
 

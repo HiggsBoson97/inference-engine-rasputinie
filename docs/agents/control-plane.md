@@ -36,7 +36,7 @@ One prefix, one standard. No worker guesses which prefix a project uses.
 ```
 docs/agents/
 ├── issue-tracker.md          ← where issues live, and the gh commands for them
-├── domain.md                 ← where GLOSSARY.md, the ADRs and the decision record live
+├── domain.md                 ← where GLOSSARY.md (removed), the ADRs and the decision record live
 ├── control-plane.md          ← this file: the loop grammar
 ├── production/
 │   ├── test-rig.md           ← the apparatus PLAN writes last; coder self-test and reviewer read it

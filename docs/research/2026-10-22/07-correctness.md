@@ -1,6 +1,6 @@
 # 07 — Measuring correctness and quality
 
-**Status:** research note, pre-SPEC. Everything here is either measured on this box (and labelled as such), quoted from a source with a URL, or derived arithmetically from a number in `REQUIREMENTS-DRAFT.md` (cited as `R##`).
+**Status:** research note, pre-SPEC. Everything here is either measured on this box (and labelled as such), quoted from a source with a URL, or derived arithmetically from a number in the withdrawn requirements draft (cited as `R##`).
 **Question:** how does a bespoke engine prove that its kernels are right and its model is the model, cheaply enough that the proof runs on every slice?
 **Short answer:** four gates at four levels, each with a tolerance derived from a measured noise floor rather than chosen by taste, and a reference built by *streaming one layer at a time* — because 27B in bf16 is 50.29 GiB and this box has 39.96 GiB of VRAM.
 

@@ -1,7 +1,7 @@
 # Domain docs
 
 **Single-context repo:** one `docs/adr/`, one decision record, one `HANDOFF.md`.
-No per-package glossaries, no `GLOSSARY-MAP.md`.
+No per-package glossaries, no GLOSSARY-MAP.md (removed).
 
 ## File structure — the layout that exists
 
@@ -28,7 +28,7 @@ thin-engine composition (ADR 0001, superseded). All engine code lives in
 
 ## What does not exist yet
 
-- **`GLOSSARY.md`** — the project has a dense vocabulary (GDN, dispatch key, the
+- **GLOSSARY.md (removed)** — the project has a dense vocabulary (GDN, dispatch key, the
   record, footprint cliff) that will need one glossary. `mattpocock-domain-
   modeling` creates it when the SPEC is written, not before.
 - **`docs/agents/domain/decisions/`** — the high-fidelity decision record. It is
@@ -46,7 +46,7 @@ the current measurements.
 
 | Artifact | Answers | Owner |
 |---|---|---|
-| `GLOSSARY.md` | What does this word mean here? | `mattpocock-domain-modeling` |
+| GLOSSARY.md (removed) | What does this word mean here? | `mattpocock-domain-modeling` |
 | `docs/adr/` | Was a hard choice made, and why? | `mattpocock-domain-modeling` |
 | `docs/agents/domain/decisions/` | What did we choose, how sure are we, what does it rest on? | `mattpocock-domain-modeling` |
 

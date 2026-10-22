@@ -24,16 +24,16 @@ measured inputs, **[L]** literature / other hardware, **[E]** estimate or judgem
 
 | quantity | value | source |
 |---|---|---|
-| weight bytes | 11.81 GB (10.96 GiB @ 3.50 bpw) | local `docs/adr/0003`, `REQUIREMENTS-DRAFT.md` R16 **[M]** |
+| weight bytes | 11.81 GB (10.96 GiB @ 3.50 bpw) | local `docs/adr/0003`, the withdrawn requirements draft R16 **[M]** |
 | weight read at batch 1, one card | **19.08 ms → 52.4 tok/s** | 11.81 GB ÷ 619 GB/s **[D]** |
 | compute per token | 54 GFLOP (2P) → **0.63 ms** at 86 TFLOP/s | **[D]** |
 | compute headroom at batch 1 | **30.4×** | **[D]** |
 | KV per token | 64 KiB bf16 / 32 KiB q8 | 16×2×4×256 elem **[M]** config arithmetic |
-| GDN recurrent state | 159 MB/sequence, read+write every step | `docs/01-models.md:38-42` **[M]** |
+| GDN recurrent state | 159 MB/sequence, read+write every step | `docs/01-models.md` **[M]** |
 | measured decode today | **862 ms/token = 1.15 tok/s**, 91.8 % of it in one Triton fp8 GEMV at 17.8 GB/s | `docs/research/20-decode-profile-27b.md:6-9` **[M]** |
 | measured RCCL all-reduce, TP2 | 3.8 ms/step (130 launches, 0.44 % of a broken step) | same **[M]** |
 | measured graph on/off delta | 0.6 % | same **[M]** |
-| measured cross-GPU copy | 14.23 GiB/s = host bounce, no P2P | `docs/00-facts.md:13-14` **[M]** |
+| measured cross-GPU copy | 14.23 GiB/s = host bounce, no P2P | `docs/00-facts.md` **[M]** |
 
 Unit caveat carried from the requirements draft (**C8**): the same facts file reports a *copy* wall
 of 592.9 GiB/s (= 636.6 GB/s) and a *read* wall of 619 GB/s, and the two are used interchangeably.
@@ -287,7 +287,7 @@ decode by one byte. The economics:
   evict by *prefix age × length*, never LRU on request arrival.
 
 **Caveat that decides whether any of this works.** KV-only dedup on a hybrid model cannot be resumed
-without the GDN state (`docs/research/00-synthesis.md:36-40`, R56 **[M]**). Without §5's snapshot
+without the GDN state (`docs/research/the composition synthesis (removed):36-40`, R56 **[M]**). Without §5's snapshot
 primitive, prefix caching here is a KV-only win on a model where KV is the smaller per-session cost —
 i.e. a rounding error. The snapshot is the feature; the radix tree is the plumbing.
 
@@ -413,10 +413,10 @@ mixed prefill+decode batching (**reject** on this box); weight streaming (**neve
 **Measured on this box (local, authoritative for every local number):**
 `docs/00-facts.md` (§bandwidth 197-198, cross-GPU 13-14, KV 151-153, instruction 199-204),
 `docs/research/20-decode-profile-27b.md` (862 ms/token; 91.8 % one kernel; 17.8 GB/s; RCCL 3.8 ms;
-graph 0.6 %; config 5.5×), `docs/01-models.md:36-42` (KV 64 KiB/token; 159 MB state),
+graph 0.6 %; config 5.5×), `docs/01-models.md` (KV 64 KiB/token; 159 MB state),
 `docs/03-native-kernel-inventory.md:28,26` (max_running_requests=3; 619 GB/s gate),
 `docs/research/17-dflash2.md` (drafter bytes, break-even algebra, unbuilt pieces),
-`REQUIREMENTS-DRAFT.md` R16/R22/R29/R30/R44/R54-R59, C8 (unit contradiction).
+the withdrawn requirements draft R16/R22/R29/R30/R44/R54-R59, C8 (unit contradiction).
 
 **Literature**
 1. Agrawal et al., *Taming Throughput-Latency Tradeoff in LLM Inference with Sarathi-Serve*, OSDI'24 — https://arxiv.org/abs/2403.02310

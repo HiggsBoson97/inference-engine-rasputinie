@@ -30,7 +30,7 @@
 | **592.9 GiB/s = 636.6 GB/s** | torch copy, counted read+write. | **A different quantity.** Copy is 599–644 GB/s r+w here; the read path is ~1.3× faster than copy. Never compare it to a read number. `[measured-on-RDNA3]` |
 | **472 GB/s** | torch/hipBLASLt bf16 GEMM at M=1, 1×5120×17408 (`docs/00-facts.md`). | **A kernel-quality number**, 61 % of the read wall. It says the library GEMM leaves 35 % on the table at batch 1, not that the card stops at 472. |
 
-The 4 % "GB/s vs GiB/s" confusion flagged as **C8** in `REQUIREMENTS-DRAFT.md` resolves the same way: 592.9 GiB/s is 636.6 GB/s, and the kernel gate should be written in GB/s against a measured read wall, not against either.
+The 4 % "GB/s vs GiB/s" confusion flagged as **C8** in the withdrawn requirements draft resolves the same way: 592.9 GiB/s is 636.6 GB/s, and the kernel gate should be written in GB/s against a measured read wall, not against either.
 
 ### 1.1 Why the same kernel reports 640 one day and 750 the next
 
@@ -201,7 +201,7 @@ The empirical shape of this is already visible in public AMD numbers: on gfx1100
 
 ## 8. The number to plan against
 
-Weight bytes per token at the target quant: 11.76 GB `[documented]`, `docs/00-facts.md:114`.
+Weight bytes per token at the target quant: 11.76 GB `[documented]`, `docs/00-facts.md`.
 
 | sustained weight bandwidth | ms/token | tok/s, one card | what this is |
 |---|---|---|---|
