@@ -3,6 +3,20 @@
 Two generations of documents. **Read `00-facts.md` for numbers; this directory
 for reasoning.**
 
+## Current — `2026-10-23/` — round two
+
+Four lanes, all read from primary sources at `file:line`, all with a mechanism
+and a transfer verdict. **Start with `s3-amd-sinks.md`**: its instruction-issue
+ceiling is the finding that reordered the plan, and it is written up in
+`docs/plan/DESIGN-instruction-budget.md`.
+
+| file | answers |
+|---|---|
+| `s1-strata.md` | the real techniques in Strata's source, and why the split is break-even when the model fits one card |
+| `s2-tensorfold-freetoken.md` | their transferable mechanisms: a measured MTP depth rule, and why the codebooks are not the cost |
+| `s3-amd-sinks.md` | the gfx1100 sinks: instruction issue, VOPD, I-cache, page size, memory hints, queues — ranked by magnitude |
+| `s4-topologies.md` | every two-card strategy over a 14.2 GiB/s link, priced in round-trips per token |
+
 ## Current — `2026-10-22/`
 
 Seven lanes written against this project, measurement-tagged, with an

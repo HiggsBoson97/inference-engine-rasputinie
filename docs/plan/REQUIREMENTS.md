@@ -49,10 +49,10 @@ performance record lives in [`RECORD.md`](RECORD.md).
 
 | # | Open question | What settles it |
 |---|---|---|
-| **A1** | What fraction of IQ3_S's 11.8 % sign-decode cost is actually recoverable? | A prototype sign path; the current probe is already branch-free SWAR, so the ceiling is 11.8 % and the recoverable part is unknown. |
-| **A2** | In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S — only IQ3_S has been measured inside a real file | One sweep per type, same gated harness. |
-| **A3** | MTP acceptance rate on this box | Half a day on our own prompts. The publisher's 3.4–4.4 is a different card. |
-| **A4** | Topology at the product level: TP=2 vs two replicas | research lane 05 says TP=2 wins (402 → 530–587 aggregate tok/s); `research/18` says the opposite at concurrency 32. Not measured end-to-end on this engine. |
+| **A1** | **Is IQ3_S instruction-bound?** The model says `n ≈ 1.57` against a budget of `1.04`, i.e. 50 % over, and that this — not memory — is the ceiling. | `rocprofv3` issue-slot occupancy on the real kernel. One counter readout. Until it returns, no memory-side optimisation counts. See `DESIGN-instruction-budget.md`. |
+| **A2** | In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S — only IQ3_S has been measured inside a real file | One sweep per type, same gated harness. Each has its own `n` and therefore its own ceiling. |
+| **A3** | MTP acceptance rate on this box | Teacher-forced replay against the shipped MTP head — no engine needed. It is now the highest-value measurement in the project, because speculation divides `n` by the acceptance length. |
+| **A4** | Topology: TP=2, two replicas, or pipeline | **Answered for our quant.** Replication costs zero link bytes and takes 2× aggregate; TP=2 pays 128 all-reduces × 20.65 µs = 2.64 ms = 27 % of the step for 1.47×; pipeline costs one 10 KiB handoff (0.67 µs) and equals replication at ≥2 concurrent requests. **DP=2 for IQ3_S; PP=2 if a larger quant is ever used.** Remaining gate: measure the mapped-memory round-trip latency, which is what decides TP's viability at any quant. |
 | **A5** | The physical cause of the ~800 MiB per-launch footprint cliff | TLB/page-walk hypothesis, untested. It constrains fusion depth, so it matters. |
 | **A6** | Whether runtime adaptation (O6) earns its complexity | Every adaptive mechanism ships with an ablation build, or its gain is unattributable. Not yet prototyped. |
 
