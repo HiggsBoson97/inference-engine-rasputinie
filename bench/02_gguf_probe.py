@@ -40,7 +40,8 @@ QUANT_TYPES = {
     8: "Q8_0", 9: "Q8_1", 10: "Q2_K", 11: "Q3_K", 12: "Q4_K", 13: "Q5_K",
     14: "Q6_K", 15: "Q8_K", 16: "IQ2_XXS", 17: "IQ2_XS", 18: "IQ3_XXS",
     19: "IQ1_S", 20: "IQ4_NL", 21: "IQ3_S", 22: "IQ2_S", 23: "IQ4_XS",
-    24: "I8", 30: "BF16", 34: "TQ1_0", 35: "TQ2_0", 39: "MXFP4",
+    24: "I8", 25: "I16", 26: "I32", 27: "I64", 28: "F64", 29: "IQ1_M",
+    30: "BF16", 34: "TQ1_0", 35: "TQ2_0", 39: "MXFP4",
     40: "NVFP4", 41: "Q1_0", 42: "Q2_0",
     143: "PTQ1_0", 144: "TQ2_T", 145: "TQK6", 146: "TQK7",
 }
@@ -164,6 +165,7 @@ def probe(path: Path, top: int) -> dict:
             alignment = meta.get("general.alignment", 32)
             if not isinstance(alignment, int) or alignment <= 0:
                 alignment = 32
+            metadata_end = c.o
             data_start = align(c.o, alignment)
         finally:
             mm.close()
@@ -194,6 +196,8 @@ def probe(path: Path, top: int) -> dict:
         "gib": round(size / 2**30, 2),
         "version": version,
         "alignment": alignment,
+        "metadata_end": metadata_end,
+        "metadata_padding": data_start - metadata_end,
         "data_start": data_start,
         "tensor_count": len(ordered),
         "kv_count": n_kv,
@@ -226,12 +230,16 @@ def probe(path: Path, top: int) -> dict:
             for t in sorted(ordered, key=lambda t: -t["bytes"])[:top]
         ],
         # Full manifest: the engine dispatches per tensor, so it needs this list.
+        # Offsets are the raw GGUF `offset` (relative to the data section); add
+        # `data_start` for an absolute file offset.
         "tensors": [
             {
                 "name": t["name"],
                 "type": QUANT_TYPES.get(t["type"], f"unknown({t['type']})"),
                 "type_id": t["type"],
                 "dims": list(t["dims"]),
+                "offset": t["offset"],
+                "file_offset": data_start + t["offset"],
                 "bytes": t["bytes"],
                 "params": t["params"],
             }

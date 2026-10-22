@@ -26,7 +26,11 @@ every time**, and to be able to say why. This file is that record.
 | `gemv/iq3s expanded 1.51× (signs kept)` | 618.1 GB/s | 79.7 % | measured | E1 — rejected |
 | `gemv/iq3s expanded, signs dropped` | 784.5 GB/s | 101.1 % | measured, **above the wall — not trusted** | E1 |
 | `exp` vs `full` correctness | **0.000e+00 bit-identical** | — | measured | E1 losslessness proof |
-| `decode/1/4096 IQ3_S, whole file` | **56.1 tok/s** | ~85 % blended | **estimated** | E1 whole-file model — optimistic, assumes non-IQ3_S types at 752 |
+| `decode/1/4096 per-tensor, 401 launches` | **712.3 GB/s → 60.6 tok/s** | 91.7 % | measured (read-stream upper bound) | `E2-LAUNCH-2026-10-22.md` §4 |
+| `decode/1/4096 2-layer fusion, 33 launches` | **774.2 GB/s → 65.8 tok/s** | **99.7 %** | measured (read-stream upper bound) | `E2` §5 |
+| `decode/1/4096 4-layer fusion, 17 launches` | 773.8 GB/s → 65.8 tok/s | 99.7 % | measured | `E2` §5 |
+| `decode/1/4096 8-layer fusion` | 691.4 GB/s → 58.8 tok/s | 89.1 % | measured — **worse than per-tensor** | `E2` §5, 1.35 GB launches cross the ~800 MiB cliff |
+| `decode/1/4096 IQ3_S, whole file` | 56.1 tok/s | ~85 % blended | **estimated** | E1 whole-file model — optimistic, assumes non-IQ3_S types at 752 |
 | `decode/1/4096 IQ3_S, signs fixed` | 59.7 tok/s | — | **estimated** | E1 |
 | `decode/1/4096 IQ3_S, expanded` | 51.1 tok/s | — | **estimated** | E1 — rejected by `DECISION-packaging-iq3s.md` |
 

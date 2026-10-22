@@ -77,3 +77,40 @@ Whether a GEMM path over a **quantised** weight layout can reach the wall at all
 The measured 752 GB/s was a GEMV; a quantised GEMM re-reads the scale plane per
 column block and the arithmetic stops being free. That is a measurement, not a
 design opinion, and it only becomes urgent if the short-context corner matters.
+
+---
+
+## Dispatch shape — decided by measurement, 2026-10-22
+
+E2 built a launch sequence whose sizes follow the real file (401 launches,
+11.2955 GB) and measured the dispatch pattern directly
+(`bench/gfx1100-probes/E2-LAUNCH-2026-10-22.md`):
+
+| grouping | launches/step | GB/s | tok/s | % of wall |
+|---|---|---|---|---|
+| per-tensor | 401 | 712.3 | 60.6 | 91.7 % |
+| 2 tensors | 201 | 725.9 | 61.7 | 93.6 % |
+| **1 layer** | **65** | **760.9** | **64.7** | **98.1 %** |
+| **2 layers** | **33** | **774.2** | **65.8** | **99.7 %** |
+| **4 layers** | **17** | **773.8** | **65.8** | **99.7 %** |
+| 8 layers | 9 | 691.4 | 58.8 | 89.1 % |
+
+**Decision: fuse 2–4 consecutive layers per launch.** Never 8: a 1.35 GB launch
+crosses the ~800 MiB footprint cliff, pays ~199 µs, and lands *below*
+per-tensor dispatch.
+
+Two facts make this cheap to adopt:
+
+- **The marginal launch cost is 2.5–2.9 µs** — the same as launching an empty
+  kernel. There is no mysterious per-launch penalty.
+- **Per-tensor dispatch is viable** at 60.6 tok/s and needs no warm-up protocol.
+  The 8 % fusion buys is exactly the launch cost; nothing about the kernels
+  improves.
+
+Which means the dispatch question is **closed at low cost**, and the whole
+remaining performance problem is the one E1 found: the dequant+dot arithmetic
+(66.6 % of wall on IQ3_S-type tensors). Fusion cannot fix that.
+
+A caveat that must not be lost: these are **read-stream** numbers — the upper
+bound of the dispatch pattern, not a GEMV. Real decode will be lower, and by how
+much is E1's arithmetic, not E2's.
