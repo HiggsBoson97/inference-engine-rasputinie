@@ -1,0 +1,24 @@
+# ── Local / regenerable ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.so
+*.whl
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+._*
+
+# ── Anchored on purpose — do not un-anchor these ─────────────────────
+# An unanchored `models/` in the previous iteration silently swallowed
+# engine/python/sglang/srt/models/ — 298 source files, 836 files total —
+# and left a repo that could not import the engine it was supposed to
+# contain. Rule: every directory rule here is anchored to the repo root.
+# Never write a bare directory name in this file.
+/models/
+/third_party/
+/build/
+/dist/
+
+# ── Never ignore build inputs ────────────────────────────────────────
+# A bare `*.mod` once matched go.mod. Do not add extension-wide rules.
