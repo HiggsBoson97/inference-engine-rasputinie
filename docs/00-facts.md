@@ -1,5 +1,16 @@
 # 00 — Measured facts
 
+> **Correction, 2026-10-22 — the read wall is 776 GB/s, not 619.**
+> Every ceiling in this file was derived from a **619 GB/s** figure that came from
+> a 1.6 ms kernel with a serial accumulator dependency. Re-measured with kernels
+> longer than ~3 ms — twice, independently — the card reads at **776 GB/s**
+> (`bench/gfx1100-probes/WALL-2026-10-22.md`), and a **fused 4-bit dequant-GEMV
+> reaches 752 GB/s** (97 % of that wall) with arithmetic verified to
+> **2.6 × 10⁻⁷**. Consequences: the IQ3_S single-card ceiling is **66 tok/s
+> weights-only and ~55 tok/s realistic**, not 52.6; the "60 % of the wall" kernel
+> gate is **466 GB/s**, not 371. **Every tok/s figure below is ~25 % low.**
+> Relative comparisons, mechanism findings and negative results all stand.
+
 Every number here comes from `bench/00_hardware_probe.py` on 2026-10-22. Run it
 again if the hardware, the driver or the ROCm version changes.
 
@@ -195,7 +206,8 @@ Five facts that change the kernel plan:
 3. **The card has 5376 lanes (84 CU x 64), not 84 x 128 = 10752.** Any estimate
    built on 10752 is 2x too optimistic.
 4. Measured read bandwidth is **619 GB/s** (copy 595 GB/s), against the 800 GB/s
-   specification.
+   specification — **SUPERSEDED 2026-10-22: this is a kernel artefact. The read
+   wall is 776 GB/s; see the correction banner at the top of this file.**
 5. **The quantised GEMV is bandwidth-bound with about 15x of issue margin.** At
    619 GB/s a Q5_K GEMV consumes ~900 G weights/s; the arithmetic costs ~805 G
    lane-slots/s against 12.2 T available, which is **6.6% issue occupancy**.
