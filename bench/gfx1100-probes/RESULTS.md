@@ -1,5 +1,12 @@
 # gfx1100 dot-product throughput on a Radeon RX 7900 XT
 
+> **Note, 2026-10-22:** the read bandwidth quoted below (619 GB/s) was later shown
+> to be a kernel artefact — the real wall is **776 GB/s**
+> (`WALL-2026-10-22.md`). The instruction conclusions stand and strengthen: at
+> 776 GB/s the GEMV needs *even fewer* issue slots, so "bandwidth-bound with a
+> large margin" is more true, not less. Card 0 here means `HIP_VISIBLE_DEVICES=0`,
+> which on this machine is the **display** card — use card 1 for load tests.
+
 Host `rasputin`, card 0 only (`HIP_VISIBLE_DEVICES=0`), ROCm 7.16 / clang 24,
 `hipcc --offload-arch=gfx1100 -O3`. Card 1 was never opened.
 

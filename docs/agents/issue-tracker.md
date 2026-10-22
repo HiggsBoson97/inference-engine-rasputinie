@@ -1,7 +1,7 @@
 # Issue tracker: GitHub
 
 Slice issues, specs and research tickets for this repo live as GitHub issues on
-`HiggsBoson97/inference-engine-rasputinie` (remote `github`, private). Use the
+`HiggsBoson97/inference-engine-rasputinie` (remote `github`, **public**). Use the
 `gh` CLI for every operation; run it inside the clone and it infers the repo.
 
 ## Conventions
@@ -32,19 +32,15 @@ The stock GitHub labels (`bug`, `documentation`, `enhancement`, …) exist too a
 may be added for humans browsing the repo; they carry no loop meaning and the
 derivation contract ignores them.
 
-## Branch protection: not available here
+## Branch protection: available, not yet enabled
 
-`main` **cannot** be protected. The repo is private on GitHub's free plan and
-GitHub answers HTTP 403 `Upgrade to GitHub Pro or make this repository public`
-for any branch-protection call. So there are no required checks, no
-`enforce_admins`, and no server-side refusal of a direct push to `main`.
+`main` **can** be protected since 2026-10-22, when the repo was made public.
+Before the first dispatch, enable: PR required, the deploy-integrity check named
+as a required check, `enforce_admins: true`, then record the change here.
 
-Consequence: the gate layer is **local discipline only**. `main` moves only
+Until that is done, the gate layer is **local discipline only**: `main` moves only
 through an orchestrator promotion after a FINAL exercise PASS; that is a rule the
-loop keeps, not a rule GitHub enforces. Do not write a protection setting
-anywhere — it does not exist. If the repo is made public or the account upgraded,
-enable: PR required, the deploy-integrity check named as required,
-`enforce_admins: true`, then record the change here.
+loop keeps, not a rule GitHub enforces.
 
 ## When a skill says "publish to the issue tracker"
 

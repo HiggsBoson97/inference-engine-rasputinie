@@ -54,8 +54,12 @@ for, and it is a much better starting position than an empty directory.
 - Scope is **Qwen3.8-27B only**. Flash-Next work is out.
 
 > **Ratified by the owner, 2026-10-22.** This clause was previously an assertion
-> with no owner quote behind it (`docs/plan/REQUIREMENTS-DRAFT.md` C2 flagged the
-> gap). The owner has now stated the scope directly: *"this is the model this
-> inference engine should 100% support, the one and only model, at IQ3_S with
-> MTP."* The narrowing stands, ratified. The MTP head is in scope from the first
-> milestone (O11); DFlash2 is a later option.
+> with no owner quote behind it. The owner has now stated the scope directly:
+> *"this is the model this inference engine should 100% support, the one and only
+> model, at IQ3_S with MTP."* The narrowing stands, ratified. The MTP head is in
+> scope from the first milestone; DFlash2 is a later option.
+>
+> The four donor-porting reports (`research/10`–`13`) and the synthesis that
+> examined composing borrowed parts were read before this decision and are
+> **removed with it**. The composition they describe is closed here; the evidence
+> for keeping it closed is this ADR and the git history.

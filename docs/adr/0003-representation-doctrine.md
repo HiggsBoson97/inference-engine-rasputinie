@@ -9,7 +9,9 @@ integer dot instructions (`v_dot4_i32_i8`, half rate, inline asm only). It has
 **no FP8 matrix instruction of any kind**. Any FP8 weight must be expanded to
 bf16 before a matrix op happens.
 
-Decode on this machine is bandwidth-bound: measured 619 GB/s per card, and the
+Decode on this machine is bandwidth-bound: **776 GB/s measured read per card**
+(corrected 2026-10-22 — the 619 this ADR was written against came from a 1.6 ms
+kernel and was a measurement artefact), and the
 27B reads every weight once per step. So the weight format decides the ceiling,
 and the compute format decides nothing that is not already free — the
 instruction-throughput probe showed the GEMV needs ~6% of the issue slots.
@@ -46,8 +48,9 @@ path is emulation overhead on a format this chip cannot accelerate.
 - The FP8 tile configs committed on 2026-10-22 remain, marked reference-only.
   They make the reference checkpoint usable; they are not the path.
 - Inventory row 1 changes from "fp8 GEMM" to "GGUF dequant + bf16 WMMA GEMV".
-- The performance ladder is re-based on IQ3_S bytes: 52.6 tok/s ceiling on one
-  card, 105 with TP=2, before speculation. Speculation multiplies whichever
+- The performance ladder is re-based on IQ3_S bytes: **66 tok/s** weights-only on
+  one card at the corrected 776 GB/s wall, and up to **~98** at TP=2 once the
+  all-reduce is charged, before speculation. Speculation multiplies whichever
   floor applies.
 - The quality gate uses the GSQ-RCO publisher's numbers (AIME25 100.00,
   LCB v6 85.71, GPQA-D 89.39 at 3.50 bpw) as the external reference, not our own

@@ -32,19 +32,22 @@ between them is a cost to be designed around, not a tuning parameter.
 
 ## Phase
 
-**PLAN.** Nothing is built until the plan gate passes. The working requirements
-document is [docs/plan/REQUIREMENTS-DRAFT.md](docs/plan/REQUIREMENTS-DRAFT.md);
-the measured physics is [docs/00-facts.md](docs/00-facts.md).
+**PLAN.** The measurement phase is complete: the decisions the plan needed are
+made and recorded. Nothing is built until the plan gate passes.
+
+Start at [HANDOFF.md](HANDOFF.md) for status and read order; the binding
+requirements are [docs/plan/REQUIREMENTS.md](docs/plan/REQUIREMENTS.md); the
+measured physics is [docs/00-facts.md](docs/00-facts.md).
 
 ## Layout
 
 ```
-engine/     pristine sglang at the pinned commit, vendored and to be reshaped in place
+engine/     vendored sglang at the pinned commit, to be reshaped in place
             (provenance: engine/UPSTREAM.md)
-docs/       00-facts  measured physics        01-models  architecture and memory math
-            03-native-kernel-inventory         adr/       accepted decisions
-            research/  measurement-backed reports      plan/  the live plan
-bench/      probes that regenerate every number in docs/
+docs/       00-facts  measured physics      01-models  the one model
+            03-native-kernel-inventory       adr/       accepted decisions
+            research/  measurement reports    plan/      requirements, records, decisions
+bench/      probes that regenerate every number, plus the GGUF manifests
 ```
 
 ## Hard rules

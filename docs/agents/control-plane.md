@@ -15,23 +15,19 @@ to it.
 
 | Setting | Value |
 |---|---|
-| Repo | `HiggsBoson97/inference-engine-rasputinie` (private), remote `github` |
+| Repo | `HiggsBoson97/inference-engine-rasputinie` (**public** since 2026-10-22), remote `github` |
 | Issue tracker | GitHub Issues via `gh` — see `docs/agents/issue-tracker.md` |
 | Slots | **2** — two slices, each a coder and its reviewer, four workers in flight |
 | Labels | `station:code`, `station:merged`, `escalated`, `blocked-spec` (closed set) |
-| Branch protection on `main` | **unavailable** — see below |
+| Branch protection on `main` | **available, not yet enabled** |
 
-**Branch protection is not available on this repo.** It is private on GitHub's
-free plan, and every branch-protection call returns HTTP 403 `Upgrade to GitHub
-Pro or make this repository public to enable this feature`. There are no
-required checks, no `enforce_admins`, and no server-side refusal of a direct push
-to `main`. The gate layer is therefore **local discipline only**: `main` moves
-only through an orchestrator promotion after a FINAL exercise PASS, because the
-loop keeps that rule, not because GitHub enforces it. Do not write a protection
-setting anywhere — it does not exist. If the repo is made public or the plan
-upgraded, enable PR-required with the deploy-integrity check named and
-`enforce_admins: true`, then update this section and
-`docs/agents/issue-tracker.md`.
+**Branch protection became available on 2026-10-22**, when the repo was made
+public. It must be enabled **before the first dispatch**: require a pull request,
+name the deploy-integrity check as a required check, and set
+`enforce_admins: true`. Until it is enabled — and the fact must be recorded here
+when it is — the gate layer is **local discipline only**: `main` moves only
+through an orchestrator promotion after a FINAL exercise PASS, because the loop
+keeps that rule, not because GitHub enforces it.
 
 ## Where the configuration lives
 
