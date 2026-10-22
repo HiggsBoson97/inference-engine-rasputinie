@@ -30,13 +30,31 @@ Ablations, as a share of the read wall: **sign decode 8.6–15.6 %**,
 
 ## The verdict
 
-**Expansion loses.** It moves 1.509× the bytes, so it needs **~781 GB/s** to
-break even against a **776 GB/s** wall — it would have to run at 100.6 % of the
-memory wall to tie. It runs at 82 %. Whole-file estimate: **51 tok/s expanded
-against 56 as-is**. Even the ideal 1.22× expansion would only reach a tie.
+**Expansion is not worth building — but the honest reason is "it can at best
+tie", not "it loses badly".**
+
+Two versions exist, and they differ:
+
+- **Expansion keeping the sign plane** (what was measured as `exp`): 618 GB/s on
+  1.509× bytes. **1.23–1.26× the wall time.** Clearly worse.
+- **Expansion dropping the sign plane**, which a real expansion makes redundant
+  because the 4-bit values carry their own sign (`exp_nosgn`): 784.5 GB/s — at
+  the wall — giving **0.994 of the current wall time**, i.e. a 0.6 % win.
+
+0.6 % does not pay for a converter, +15.8 % disk, a bit-exactness harness and a
+second artifact format. And the tie depends on a row that reports **101.1 % of
+the wall**, which is not fully trusted (see the unresolved caveat below).
 
 **Serve the file as published.** No converter, no prepared artifact, no
 bit-exactness machinery, no extra disk.
+
+## The losslessness proof, which is worth keeping
+
+The expansion was verified **bit-identical** to the direct dequant: `exp` vs
+`full` = **0.000e+00** over 30 real tensors, both agreeing with an independent
+fp64 CPU reference to 4.83e-06. So if the packaging question ever reopens — a
+different model file, a different card, a sign path that proves irreducible — the
+answer is known to be computable exactly, not approximately.
 
 ## What this corrects in the record
 
