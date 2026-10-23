@@ -18,6 +18,30 @@ everywhere else. That is the failure this document exists to prevent.
 | **drafter** | MTP: **1.064 GB per draft token** (0.325 GiB Q6_K layer + 0.666 GiB LM-head re-read) — 7.445 GB for 7 tokens, **65.6 % of a sweep**. DFlash2: **0.257 GB per token**, flat in block size (one forward per block) — 1.798 GB at 4.5 bpw, **15.8 % of a sweep** | per step, so MTP scales with draft depth and DFlash2 does not | measured as a cost model in `run-artifacts/hypotheses/H-5.md`; the earlier "MTP ≈ 0.348 GB per pass" was wrong by 3× because the head re-reads the LM head |
 | **all-reduce / handoff** | `128 × RTT` (TP) or `64 × RTT` (PP) | per step, independent of B | RCCL floor measured at **~19.5 µs**, 20.65 µs amortised at 10 KiB, not tunable by NCCL env (`docs/research/18-tp-roccl.md`) |
 | **launch overhead** | 17–33 launches × 5–30 µs | per step | measured, E2 |
+| **verification increment** | `ms(k) = 1.764 + 0.588·k` on a 1.0700 GiB IQ3_S slice; marginal **0.567 ms per extra token**, flat, no knee | per step; the first token pays the weight read, each further one pays only compute | measured, `H-9`. Whole-file: marginal ≈ **5.40 ms/token**, so the budget per *drafted* token is `p × 5.40` ≈ **3.87 ms** at p = 0.72 |
+
+## What the verify curve changes — the drafter is the bottleneck, not the verifier
+
+`H-9` measured the verification increment directly: `ms(k) = 1.764 + 0.588·k` on a 1.0700 GiB
+slice of real IQ3_S, and the marginal cost of the k-th token is **flat at 0.51–0.72 ms with no
+knee**. Every extra token costs the same small increment, because ~102 of the 193 instruction
+words in the body are dequant work that all `k` activation vectors share — words per token fall
+from 193 to 52.6.
+
+Scaled to the whole file, the marginal verification cost is ≈ **5.40 ms per token**, so the
+budget a drafter has to beat per *drafted* token is `p × 5.40` ≈ **3.87 ms** at p = 0.72:
+
+| drafter | ms per draft token | share of budget | verdict |
+|---|---:|---:|---|
+| MTP head, 7 tokens | 2.04 | 53 % | pays, expensively |
+| DFlash2 BF16 | 1.25 | 32 % | pays |
+| DFlash2 4.5 bpw | **0.49** | **13 %** | pays comfortably |
+
+**So depth is not limited by verification.** There is no depth at which the verifier stops
+paying; depth is limited by acceptance, and the cost is in the drafter. That inverts the earlier
+intuition (and the reason I had queued the curve first). What remains unmeasured is the
+**acceptance curve** `A(k)` — A3's teacher-forced replay — which is now the only unknown
+standing between these numbers and a chosen depth.
 
 ## The two boundaries — the whole shape story
 

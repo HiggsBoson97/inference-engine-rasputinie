@@ -31,7 +31,7 @@ every time**, and to be able to say why. This file is that record.
 | `gemv/iq4xs read / dot, 1.1024 GiB` | **637.1 / 502.1 GB/s** | 82.1 / 64.7 % | measured, gated, fp64 err 2.2e-06 | `H-4.md` |
 | `gemv/q3xxs read, 1.2393 GiB` | 643.6 GB/s | 82.9 % | measured (dot **not gated** — fp64 err 1.4, checksum mismatch) | `H-4.md` |
 | `gemv/iq2s read, 1.1378 GiB` | 656.6 GB/s | 84.6 % | measured (dot **not gated** — documented layout does not close) | `H-4.md` |
-| `gemv/q4k read / dot, 1.3321 GiB` | **659.6 / 452.2 GB/s** | 85.0 / 58.3 % | measured, gated; dot is **kernel**-limited (344 words/16 w) | `H-4.md` |
+| `gemv/iq3s verify k=1..8, 1.0700 GiB` | **2.35 → 6.47 ms/step** (2.75×) | — | measured, gated twice per k | `H-9.md` — `ms(k) = 1.764 + 0.588k`, marginal flat 0.51–0.72 ms |
 | `exp` vs `full` correctness | **0.000e+00 bit-identical** | — | measured | E1 losslessness proof |
 | `decode/1/4096 per-tensor, 401 launches` | **712.3 GB/s → 60.6 tok/s** | 91.7 % | measured (read-stream upper bound) | `E2-LAUNCH-2026-10-22.md` §4 |
 | `decode/1/4096 2-layer fusion, 33 launches` | **774.2 GB/s → 65.8 tok/s** | **99.7 %** | measured (read-stream upper bound) | `E2` §5 |
