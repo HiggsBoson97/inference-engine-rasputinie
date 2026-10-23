@@ -101,8 +101,11 @@ Write `docs/agents/production/run-artifacts/hypotheses/H-6.md`, then print it:
 ## Topology as the hardware reports it (P2P capable? same root complex? links)
 ## Method (a/b/c, iteration counts, warm-up, clock state)
 ## Results (table: path, size, median, p99, max, mismatch count)
-## Implied TP=2 step at 128 all-reduces (table over the measured RTT)
-## Verdict (TP vs DP for single-stream and for concurrency >= 2, with the number)
+## Implied cost at 128 all-reduces (TP) and 64 handoffs (PP), over the measured RTT
+## Verdict (TP vs PP vs DP for single-stream and for concurrency >= 2, with the number.
+##          PP needs no reduction primitive at all — 64 one-way layer handoffs instead of
+##          128 all-reduces — so at batch 1 it may beat TP while being simpler to build;
+##          say so if the arithmetic supports it, and say what it costs at batch >= 2.)
 ## Compliance (display-card caution observed; llama.cpp excluded; clocks restored)
 ## Receipts (absolute paths under ~/a5/)
 ```
