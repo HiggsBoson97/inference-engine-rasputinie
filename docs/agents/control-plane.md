@@ -1,33 +1,47 @@
-# Control-plane protocol — GitHub Issues as the loop's state machine
+# Control plane — GitHub Issues as the loop's state machine
 
-> Canonical home of the issue schema, the derivation contract, and the dispatch
-> contract for **this repo**. Paths are already resolved for
-> `rasputinie`; the grammar is unchanged from
-> `fullstack-software-development/references/control-plane-protocol.md`.
+One issue per slice: the body is the contract, the comment tail is the position, labels
+are a view of the tail. **The orchestrator operates the plane alone** — it derives the
+stage, dispatches every worker, and posts every comment from a presence-checked report.
+Workers never write to it.
 
-GitHub Issues is the control plane: a slice's issue body is its static contract,
-its comment thread is the position ledger, labels are the stage vocabulary. **The
-orchestrator operates it alone** — it derives each stage, dispatches the coder
-unit, and posts every comment from a presence-checked report; workers never write
-to it.
+**This file is a projection, not the grammar.** It carries this repo's configuration and
+absolute paths; the normative rules — the envelope, the grammar lines, the cap, the
+failure responses — live in the skill's reference files and are cited here, never
+restated in a repo-local variant. Where this file and the skill disagree, the skill wins
+and this file is the defect.
 
-## Project configuration (settled at priming, 2026-10-22)
+Skill root, and the base of every `references/…` path below:
+
+```
+/Users/mattiabosi/.hermes/profiles/fullstack-software/skills/software-development/fullstack-software-development
+```
+
+Pinned: `fullstack-software-development` **v10.0.0**. The orchestrator owns this plane;
+its own instructions are `references/orchestrator.md`.
+
+## Project configuration
 
 | Setting | Value |
 |---|---|
-| Repo | `HiggsBoson97/inference-engine-rasputinie` (**public** since 2026-10-22), remote `github` |
-| Issue tracker | GitHub Issues via `gh` — see `docs/agents/issue-tracker.md` |
-| Slots | **2** — two slices, each a coder and its reviewer, four workers in flight |
+| Repo | `HiggsBoson97/inference-engine-rasputinie` — **public** since 2026-10-22 |
+| Remotes | `origin` = bare repo on host `rasputin`; `github` = the public repo |
+| Mac checkout | `/Volumes/Crucial X9 Pro 2TB/Personal/tailscale/rasputin/development/inference-engine-rasputinie` |
+| Host checkout | `/home/mattia-bosi/development/inference-engine-rasputinie` |
+| Issue tracker | GitHub Issues; `gh` for every operation — `docs/agents/issue-tracker.md` |
+| Slots | **2** — two coder slots; each carries a coder and its reviewer, four workers in flight |
 | Labels | `station:code`, `station:merged`, `escalated`, `blocked-spec` (closed set) |
-| Branch protection on `main` | **available, not yet enabled** |
+| Branch protection on `main` | **available since 2026-10-22, not yet enabled** |
+| Rig | `docs/agents/production/test-rig.md` — a target; PLAN writes it last |
+| Lessons | `docs/agents/production/lessons-learned.md` — a target; LEARN creates it |
 
-**Branch protection became available on 2026-10-22**, when the repo was made
-public. It must be enabled **before the first dispatch**: require a pull request,
-name the deploy-integrity check as a required check, and set
-`enforce_admins: true`. Until it is enabled — and the fact must be recorded here
-when it is — the gate layer is **local discipline only**: `main` moves only
-through an orchestrator promotion after a FINAL exercise PASS, because the loop
-keeps that rule, not because GitHub enforces it.
+Branch protection became available when the repo went public. Enable it **before the
+first dispatch**: PR required, the deploy-integrity check named as a required check,
+`enforce_admins: true`, then record the change here. Until it is enabled the gate layer
+is **local discipline only** — `main` moves only through a promotion merge that stands on
+a FINAL PASS, because the loop keeps that rule, not because GitHub enforces it.
+`references/promote.md` treats absent protection as a refusal, so the first dispatch
+after enabling is also the first that can merge.
 
 ## Where the configuration lives
 
@@ -35,22 +49,37 @@ One prefix, one standard. No worker guesses which prefix a project uses.
 
 ```
 docs/agents/
-├── issue-tracker.md          ← where issues live, and the gh commands for them
-├── domain.md                 ← where GLOSSARY.md (removed), the ADRs and the decision record live
-├── control-plane.md          ← this file: the loop grammar
-├── production/
-│   ├── test-rig.md           ← the apparatus PLAN writes last; coder self-test and reviewer read it
-│   ├── lessons-learned.md    ← cross-run memory
-│   ├── run-artifacts/        ← receipts and dispatch briefs; GATE comments point here
-│   │   └── briefs/
-│   └── issues.md             ← the control plane when a project has no GitHub remote (unused here)
-└── invariants/               ← project rules the coder loop must not violate
+├── control-plane.md          ← this file: the loop's configuration and grammar
+├── issue-tracker.md          ← the transport: gh commands, label set, protection state
+├── domain.md                 ← the ADRs and the decision record (`D-<n>` ids)
+├── invariants/               ← rules the coder loop must not violate
+└── production/
+    ├── test-rig.md           ← TARGET: PLAN's last act, written from `references/rig.md`
+    ├── lessons-learned.md    ← TARGET: created by LEARN from `references/lessons.md`
+    ├── hypothesis-ledger.md  ← Discovery's ledger (`references/discovery-records.md`)
+    └── run-artifacts/
+        ├── briefs/           ← every dispatch brief
+        ├── hypotheses/       ← H-<n>.md evidence reports
+        ├── reviews/          ← <slice>-r<n>.md, the coder-committed returns
+        ├── test-<slice>.md   ← the rig report a GATE comment cites
+        ├── integrity-<slice>.md
+        └── final-<slice>.md
 ```
 
-The repo's operating rules live in the root `AGENTS.md` (hardware, the two hard
-rules, sync topology, measurement discipline), not in `docs/agents/agents.md`.
+The rig and the lessons file are **targets, not placeholders**: nothing is authored by
+hand at priming time. PLAN writes the rig as its last act and a dispatch before it exists
+is not a dispatch; LEARN appends the first lessons line after the first promotion. An
+empty file in either place is a lie about what the loop has done. The directories under
+`run-artifacts/` appear with their first file; `briefs/` is populated now.
 
-## Issue body schema (static contract — never edited after creation)
+There is no `issues.md` here: this project has a GitHub remote, so the GitHub-less
+transport in `references/protocol.md` §Contract versions does not apply. The repo's
+operating rules live in the root `AGENTS.md`: hardware, the two hard rules, sync
+topology, measurement discipline.
+
+## The issue body is the contract
+
+Authored at PLAN, immutable afterwards.
 
 ```markdown
 ## Objective
@@ -58,304 +87,365 @@ rules, sync topology, measurement discipline), not in `docs/agents/agents.md`.
 
 ## Repo / Worktree
 - repo: /Volumes/Crucial X9 Pro 2TB/Personal/tailscale/rasputin/development/inference-engine-rasputinie
-- branch: slice/<slice-id> (cut from main at dispatch by the orchestrator)
+- branch: slice/<slice-id> (cut from main at dispatch)
 
 ## Acceptance Criteria
-- <AC, gradeable, one line each>
+- <gradeable, one line each>
 
 ## Gates
-<ordered stage list — CODE is the only stage inside the coder loop>
-
-## Routing
-<stage=guide-path pairs, relative to the skill's references/ — e.g. "CODE=coder/coder-guide.md">
+CODE -> FINAL -> MERGE
 
 ## Decisions
-- <every decision this slice depends on — the coder loop receives nothing else>
+- <the D- ids this slice rests on>
 
-## Risk hypotheses (<=2 predicted failure trajectories)
-- <trigger -> changed surface -> observable consequence>   (or "none identified")
+## Seams
+- <the public boundaries this slice is proven at>
 
-## Persisted data (conditional — required when the slice changes what data saved by a previous version means)
-- <migration for that data | documented no-op proof | none>
+## Required Properties
+- <the invariants that must still hold afterwards>
+
+## Disqualifying Conditions
+- <the finding that voids the slice outright>
+
+## Risk tier
+standard | high (<reason, or the one-way-door catch-all>)
+
+## Risk hypotheses
+- <trigger -> surface -> observable consequence>   (or "none identified")
+
+## Persisted data
+- <migration | documented no-op proof | none>
+
+## Blocked by
+- <slice ids, or "none">
 ```
 
-Rules:
-
-- The body carries **shape, never state**. No stage, no status — the stage lives
-  in labels plus comments.
-- `Gates` lists the stages this slice passes, in order; the stage vocabulary is
-  closed — CODE is the only stage inside the coder loop.
-- `Routing` is the stage→guide-path map; a guide path is relative to
-  `fullstack-software-development/references/`.
-- One issue per slice. Slice dependencies are recorded in `Blocked by` (ordering
-  constraint) — the orchestrator sequences slot dispatches; there is no parent
-  auto-promotion to emulate.
-- **Risk hypotheses are hypotheses, never findings:** authored at PLAN from the
-  rig heuristics and the slice's touched surfaces; the coder's self-test walks
-  each to confirmed or refuted; the reviewer disposes them through its findings;
-  an undisposed plausible trajectory blocks promotion.
-- **Persisted data** is required for any slice that changes what data saved by a
-  previous version means — here that includes a GGUF file that already exists on
-  disk, a `bench/results/*.json` schema, or a KV/state checkpoint layout. Missing
-  on such a slice → the issue is not created. A non-`none` declaration routes the
+- The body carries **shape, never state**. No stage, no status — the stage lives in the
+  tail, the label mirrors it.
+- `Seams`, `Required Properties`, and `Disqualifying Conditions` are **mandatory**. A
+  missing one is a **human escalation**, never a default, never filled from the plan's
+  prose. The plan judge fails the plan gate on any of the seven blocks missing
+  (`references/plan-judge.md`, checklist item 5).
+- `Seams` is agreed with the human before authoring: the module boundaries this work is
+  proven at, a short list, not a test plan.
+- `Risk tier` is `standard` or `high`. `high` requires the promotion approval, names its
+  reason, and takes the one-way-door catch-all when the slice cannot be undone. The
+  high-risk floor is auth/identity, payments, secrets, CI/CD and branch protection,
+  schema and data deletion, deploy/infra, public API contracts, crypto — here that
+  includes the GGUF reader contract and anything that changes on-disk weight layout.
+- `Gates` is the ordered stage list; v10 defines one, `CODE -> FINAL -> MERGE`. CODE is
+  the only stage inside the coder loop. A successor is **read from this list, never
+  recalled**.
+- **Risk hypotheses are hypotheses, never findings**: authored at PLAN from the rig
+  heuristics and the slice's touched surfaces; the coder's self-test walks each to
+  confirmed or refuted; the reviewer disposes them through its findings.
+- **Persisted data is always present**: `none`, a migration, or a documented no-op proof.
+  For this repo that means a GGUF file already on disk, a `bench/results/*.json` schema,
+  or a KV/state checkpoint layout. A non-`none` declaration puts the
   boot-on-persisted-state check into the slice's self-test.
-- At PLAN, before issue creation, run the coherence scan — an authoring error is
-  caught there, not later.
+- One issue per slice. `Blocked by` carries the ordering constraint; the orchestrator
+  sequences the dispatch, and there is no parent auto-promotion. A slice with an
+  unpromoted blocker waits.
+- `D-` ids come from `docs/agents/domain.md`'s decision record. The issue cites ids and
+  never restates their content.
 
-## Label vocabulary (closed set)
+## Contract versions
 
-| Label | Meaning | Set by |
+The body is immutable, so its identity travels as a version. Every brief carries
+`CONTRACT v<n> sha256:<hash>`; every worker report echoes the version it read; the
+orchestrator recomputes the hash at presence check.
+
+- The hash is SHA-256 over the canonical contract bytes: **the issue body exactly as
+  stored, then the latest `CONTRACT-AMENDMENT` block exactly as posted, then one trailing
+  newline.** That is the text the brief points at.
+- A worker that cannot read the contract reports `BLOCKED`. It never reconstructs the
+  contract from the envelope.
+- A mismatch, or an unreadable contract, is a **failed dispatch** — never a report.
+- A change is a **new version**: post `CONTRACT-AMENDMENT v<n+1> sha256:<hash>` carrying
+  the changed block. Never edit the body, never edit an amendment.
+- An amendment that changes an AC, a seam, a required property, the risk tier, or the
+  slice's scope is a re-entry and needs the human re-approval `references/re-entry.md`
+  defines.
+
+## Labels are a view
+
+The closed set is `station:code`, `station:merged`, `escalated`, `blocked-spec`. The
+comment tail is authoritative; a label that contradicts it is an anomaly, fixed before
+any dispatch. **Labels never select work**: selection reads open issues and derives the
+stage from the tail. Every label write is read back.
+
+| Label | Set | Clear |
 |---|---|---|
-| `station:code` | slice open — in the coder loop, or passed and awaiting promotion | orchestrator at dispatch, and after any FAIL |
-| `station:merged` | final gate passed and promoted to main | orchestrator at promotion close |
-| `escalated` | needs a user decision | orchestrator, with a comment naming the decision |
-| `blocked-spec` | spec gap discovered | orchestrator, with the gap evidence |
+| `station:code` | at dispatch | at `GATE\|CODE\|PASS`; a passed slice awaits promotion unlabeled |
+| `station:merged` | at `GATE\|MERGE\|PASS` | never |
+| `escalated` | at an escalation | when the decision is recorded |
+| `blocked-spec` | at an architectural re-entry | at `RESUMED`, or a superseding PLAN line naming the slice |
 
-A closed slice carries `station:merged`; every open slice carries `station:code` —
-the comment tail is the position of record (pipeline lines take no label). A
-label that contradicts the tail is an anomaly: fix the ledger before any
-dispatch.
+No fifth stage label, and the stock GitHub labels (`bug`, `documentation`, …) carry no
+loop meaning. Posting a pipeline line takes no label.
 
-## Thread grammar (position ledger — append-only)
+## The thread is the position
 
-**The orchestrator posts every comment on a slice issue**, written from the
-presence-checked report — a claim without evidence lands nowhere:
+Append-only. The orchestrator posts every comment from a presence-checked report, so a
+claim without evidence lands nowhere.
 
 ```
-GATE|<stage>|PASS|<one-line evidence pointer>
-GATE|<stage>|FAIL|<ranked findings, one line each>
-->GATE:<next-stage>       (posted together with the PASS line, where the Gates list names a successor)
+GATE|<stage>|PASS|<evidence pointer>
+GATE|<stage>|FAIL|<ranked findings>
+GATE|CODE|BLOCKED|<decision needed>
+->GATE:<next-stage>
+APPROVAL|PLAN|<artifact path>
+APPROVAL|PROMOTE|<slice>|<artifact path>
+ESCALATED|<decision needed>
+PAUSED|<re-entry ref>
+RESUMED
 ```
 
-- Rejection: post `GATE|CODE|FAIL|<findings>`, set `station:code`, re-dispatch the
-  coder loop with the findings stamped into the brief.
-- Approval: post `GATE|CODE|PASS|<evidence>`; the slice awaits promotion. **The
-  successor — where one exists — is the next entry in the issue's `Gates` list:
-  read it, never recall it.** A posted successor the list does not name is an
-  anomaly: fix the ledger with a corrective comment naming the right successor
-  before any dispatch continues.
-- A coder loop claiming done before the final PASS is rejected; the comment
-  records the violation; the next derivation uses the comment tail, never the
-  claim.
+- `<stage>` is `CODE`, `FINAL`, or `MERGE`. One GATE line per round of a stage.
+- `->GATE:<next-stage>` is a separate line in the same comment as its PASS, and the
+  successor comes from the issue's `Gates` list. A posted successor the list does not
+  name is an anomaly: correct it with a comment before any dispatch continues.
+- A FAIL inherits no successor. `GATE|CODE|BLOCKED` is a **first-class line** with no
+  successor, and it routes to escalate, not to STALL.
+- A worker's `BLOCKED` is a report status, not a comment: the orchestrator records
+  `ESCALATED` (a decision is needed) or `PAUSED` (an architectural re-entry). Only CODE
+  has a `BLOCKED` line.
+- `ESCALATED` and `PAUSED` block dispatch until `RESUMED`; the last GATE line remains the
+  position throughout.
+- Comments are append-only: a correction is a new comment naming the one it corrects.
+  Never edit or delete a line.
+- A coder claiming done before the final PASS is rejected; the next derivation uses the
+  tail, never the claim.
 
-## Pipeline-level gates (pipeline issue — one per project)
+## Pipeline-level lines
 
-Pipeline lines live on the project's pipeline issue, posted by the orchestrator;
-they take no label and do not enter slice derivation:
+The pipeline issue is the project's single issue titled `PIPELINE`; its transport is
+`docs/agents/issue-tracker.md`. It carries project facts only — a slice's position stays
+on its own thread, and pipeline lines enter no slice derivation.
 
 | Line | When |
 |---|---|
-| `GATE|PLAN|PASS|<rig path>` | PLAN loop close (once) |
-| `SLOT|<slice-id>|OPEN|<stage>` / `SLOT|<slice-id>|CLOSE|<stage>|<verdict>` / `SLOT|-|IDLE|<reason>` | every coder-unit dispatch, loop return, or idle period |
-| `GATE|PROMOTE|PASS|<old-sha..new-sha>` | after each promotion merge |
-| `GATE|FINAL|PASS|<report path>` | after each promotion's exercise |
+| `APPROVAL\|PLAN\|<artifact path>` | the human approves the SPEC and the slice list |
+| `GATE\|PLAN\|PASS\|<rig path>\|<approval ref>` | Discovery close; again on a superseding re-entry (the ref is the re-approval, or "none — unchanged") |
+| `IDLE\|<reason>` | a slot with no ready slice |
+| `STALL\|<slice>\|<reason>` | a dispatch failed to return; posted before the re-dispatch |
+| `GATE\|PROMOTE\|PASS\|<old..new sha>` | after a promotion merge |
 
-Promotions refuse a project whose `GATE|PLAN|PASS` line is missing; each
-promotion requires the FINAL exercise of its own candidate.
+**There is no slot-granularity line and no pipeline-level FINAL line.** Slot occupancy is
+derived, not posted: the coder slots count worktrees whose slice has no `GATE|CODE|PASS`;
+the promotion lane counts open PRs whose slice has `GATE|CODE|PASS` and no
+`GATE|MERGE|PASS`. A count that disagrees with the tails is an anomaly.
 
-A FINAL FAIL routes by class: slice defects reopen the slice (re-dispatch the
-coder subagent with the findings stamped into a fresh brief), rig gaps re-enter
-the PLAN loop, a broken or missing instrument holds and escalates.
+## Derivation
 
-## Derivation contract (normative)
-
-Before dispatching anything on a slice, the orchestrator computes the stage from
-the issue's comment tail:
+Read the slice's tail, the PR head, the worktree, and the pipeline's newest line.
 
 ```
-stage =
-  first Gates entry                        if no GATE comment exists
-  CODE                                     if last GATE comment is GATE|X|FAIL
-  successor(X) in Gates                    if last is GATE|X|PASS and X is not final
-  promotion-ready                          if last is the final Gates entry PASS
+first entry in Gates                 if no GATE line exists and no PR is open
+successor(X) in Gates                if the last GATE is X|PASS and X is not MERGE
+closed                               if the last GATE is MERGE|PASS
+the failure response table           if the last GATE is X|FAIL or CODE|BLOCKED
 ```
 
-- **Closure precondition (hard rule):** an issue closes only via the promotion
-  close (`station:merged`).
-- **Failure routing (canonical).** Every FAIL routes by class — every other
-  mention points here:
+- A missing GATE line is CODE only when the worktree is freshly cut and no PR exists.
+  An open PR with no GATE line is an anomaly: **STOP**, never default to CODE.
+- A comment read older than the pipeline's newest line is stale: **STOP**.
+- Labels are not an input.
+- The derivation is computed from the thread every time. There is no cached stage and no
+  remembered round.
 
-  | Failure | Routes to |
-  |---|---|
-  | Slice defect (reviewer, closing, or FINAL findings) | reopen the slice (`station:code`), re-dispatch the coder loop with the findings stamped into a fresh brief |
-  | Rig gap | re-enter the PLAN loop, targeted |
-  | Broken or missing instrument | hold + escalate, naming the exact decision needed |
-  | GitHub-side failure (auth, rate limit, conflict) | retry with backoff; if it persists, hold + escalate naming the operation |
+## Failure responses
 
-  An all-rig-gap FAIL re-enters PLAN; a mixed FAIL routes to CODE for its slice
-  findings, and the rig-gap subset separately re-enters PLAN.
-- **Marker obligation (hard rule):** every stage run produces exactly one GATE
-  comment, posted by the orchestrator from a presence-checked report. The comment
-  tail is the position of record; labels mirror it.
-- **Caps (canonical home — every other mention points here).** Two caps bound
-  cycles on one slice, both counted from the issue's comment history, never from
-  recollection:
-  - **Refire cap:** 3 identical FAIL verdicts on one gate = forced re-orient
-    (replan the brief, never a 4th identical dispatch).
-  - **Round cap:** 5 fix cycles on one slice, regardless of verdict variety =
-    forced re-orient (replan the brief or escalate).
+Five responses, and one precondition. **STOP/RECONCILE is a precondition, not a
+response**: a diverged `main`, a foreign checkout, a stale read, a label/tail
+contradiction, or an occupancy anomaly stops the transition until it is reconciled.
 
-## The coder dispatch (the coder-unit contract)
+| Response | When | Evidence obligation |
+|---|---|---|
+| **OWNER RETRY** | a slice defect, a merge conflict, or a stalled dispatch | same role, same gate, typed findings or a conflict report; a retry does not reset the cap. A maintenance retry is typed: no label churn, no review round, and any head change voids FINAL |
+| **RE-PLAN** | a rig gap, a wrong decomposition, a cap hit, a finding that indicts a plan premise | targeted Discovery, one judge, a superseding `GATE\|PLAN\|PASS`; human re-approval when scope, public contract, or risk tier changes |
+| **ESCALATE** | a broken or undeclared instrument, an environment block, a scope conflict, a repeated failure | the exact decision, the options, the evidence; a hold (pending check) is distinct from a decision |
+| **MECHANICAL RETRY** | auth, rate limit, a transient network failure | same actor, same operation, backoff; no dispatch, no GATE line |
+| **RECORD** | a defect found after the merge | the outcome ledger row names the stage that should have caught it |
 
-The coder unit is a **first-layer subagent** the orchestrator dispatches with
-`delegate_task`. The dispatch goal is SHORT and names the brief file as
-authoritative; the brief file — written with `mattpocock-handoff` before the
-dispatch, under `docs/agents/production/run-artifacts/briefs/` — carries the full
-contract. There is no standing goal, no terminal session, no completion marker:
-the coder runs to its report and returns it to the orchestrator, who
-presence-checks it against evidence.
+- A `BLOCKED` return routes to ESCALATE. It is never a stall and never a FAIL.
+- A mixed FAIL can need two responses at once: the slice findings to OWNER RETRY, the rig
+  gap to RE-PLAN.
+- Repetition escalates: two strikes of any shape, two identical stalls, or any failure on
+  a degraded lane.
+- A failed presence check is a failed dispatch: post `STALL|<slice>|<reason>` and dispatch
+  a fresh coder from `references/redispatch-brief.md`. Nobody takes over the work or runs
+  one step of it.
 
-**The brief file — required contents, in this order:**
+## The review cap
+
+**One cap: three review rounds per cycle.**
+
+- A round is one `GATE|CODE|` comment on the issue, including a `BLOCKED` round.
+- A `STALL` or a re-dispatch adds no round. A retry never resets the count.
+- The counter is the issue's `GATE|CODE|` lines — not a file count, not recollection.
+- A fourth round is a **re-plan or an escalate**, never a reset and never an archive.
+- The brief carries `REVIEW-CAP: 3` and the reviewer's brief carries `ROUND: n/3`. They
+  name the same limit; `references/review-contract.md` owns the round, the return and
+  the pin.
+
+## Slots and occupancy
+
+Two slots. A slot is occupied from dispatch until `GATE|CODE|PASS`; a passed slice awaits
+promotion in the promotion lane, not in a coder slot. A ready slice plus an empty slot is
+a dispatch; no ready slice plus an empty slot is one `IDLE|<reason>` line. Occupancy is
+derived from worktrees plus PRs, split by the tail — never from a posted counter.
+
+## The dispatch envelope
+
+One contract for every worker (`references/protocol.md` §Dispatch). The filled envelopes
+are `references/templates/coder-brief.md`, `references/templates/reviewer-brief.md`, and
+`references/templates/final-brief.md`; the stall envelope is
+`references/redispatch-brief.md`.
 
 ```
-STATION: CODE (the coder loop)
+STATION: <role>
 SKILL: fullstack-software-development
-GUIDE: <absolute path to the skill root>/references/coder/coder-guide.md
-WORKTREE: <absolute path>   BRANCH: slice/<id>   BASE SHA: <sha>
-TOOLSET: <the rig's declared instruments>   (workers hold no control-plane write access)
-BATCHING: <verbatim — the standing block below>
-PROCESSES: <verbatim — the standing block below>
-BUDGET: <tool-call budget; at ~90% switch to write-out mode; over-budget items report as failed(budget), never omitted>
-ACS: <the issue's AC list, verbatim>
-DECISIONS: <the issue's Decisions block>
-RISK-HYPOTHESES: <the issue's risk hypotheses, verbatim>
-FINDINGS-SO-FAR: <on fix loops, the ranked findings being addressed>
-PERSISTED-DATA: <the issue's ## Persisted data block, verbatim ("none" if none)>
-JOURNEYS: <orchestrator-enumerated journeys for this slice, if any — floor, never ceiling; name for each journey which stage owns it>
-REPORT SHAPE: <the coder's report shape, below>
+GUIDE: <absolute path to the role's guide>
+SLICE: <slice-id>
+ARTIFACT: <worktree + branch, or the deployed candidate for FINAL>
+CONTRACT: v<n> sha256:<hash> — the issue body plus any amendments
+RIG: /Volumes/Crucial X9 Pro 2TB/Personal/tailscale/rasputin/development/inference-engine-rasputinie/docs/agents/production/test-rig.md
+TOOLSET: <the instruments this role may run>
+BATCHING: <the protocol's standing block, verbatim>
+PROCESSES: <the protocol's standing block, verbatim>
+BUDGET: <tool-call budget; at ~90 % switch to write-out mode; unfinished items report as failed(budget)>
+ROUND: <n>
+FINDINGS-SO-FAR: <ranked findings, or "none">
+ACS / DECISIONS / SEAMS / REQUIRED-PROPERTIES / DISQUALIFYING-CONDITIONS / RISK-HYPOTHESES / PERSISTED-DATA: <the issue's blocks, as the role needs>
+REPORT SHAPE: <the role's shape>
 ```
 
-**The two standing blocks, verbatim:**
+- **The opening trio is a hard rule**: `STATION:` names the role, `SKILL:` names
+  `fullstack-software-development`, `GUIDE:` is the **absolute** path to that role's
+  guide. From those three lines a worker knows its role, its skill, and the guide that
+  defines its behaviour. `BATCHING` and `PROCESSES` are the protocol's blocks, copied
+  verbatim — a worker cannot infer them.
+- **Coder extras:** `WORKTREE`, `BRANCH`, `BASE SHA` (the work baseline), `DIFF BASE`
+  (the slice's original branch point, never moves), `ROUND: n`, `REVIEW-CAP: 3`. Guide:
+  `references/coder.md`.
+- **Reviewer extras:** the coder's round report **verbatim**, `DIFF BASE`,
+  `PRIOR-RETURN: <path or "none — round 1">`, `ROUND: n/3`. Guide: `references/reviewer.md`.
+- **FINAL extras:** the deployed `ARTIFACT`, the `INTEGRITY` record path, the `SURFACES`
+  floor, and the issue's ACs and `PERSISTED-DATA` inline. FINAL has no worktree and no
+  branch. Guide: `references/final.md`.
+- The brief carries a **projection** of the issue plus the contract version. It is not a
+  bare pointer: a worker that cannot read the issue reconstructs nothing and reports
+  `BLOCKED`.
+- A worker report travels as **content, never a pointer** — the coder's round report and
+  the reviewer's return are the artifacts under test.
+- Depth: the coder at depth 1, its reviewer at depth 2, FINAL in a fresh context that is
+  never a coder or reviewer of this slice.
+- Every brief is written to `docs/agents/production/run-artifacts/briefs/` before the
+  dispatch, and the dispatch goal names the brief as authoritative.
 
-```
-BATCHING: independent reads, searches, fetches and read-only commands go in ONE turn — they run concurrently, and a turn costs one whole model request; only a call that needs a result you do not have yet waits for the next turn
-PROCESSES: join or kill every process you start before your final report; a started process whose result was never read is a named gap, never assumed successful
-```
+## Promotion
 
-The two blocks are neither optional nor paraphrased: a worker cannot infer them —
-a dispatch starts in a fresh context with no memory and no inherited identity.
-Keep the field order exactly as listed: the brief's opening is the dispatch
-prefix, and a byte-stable prefix is what the local runtime's cache reuses.
+The orchestrator alone moves `main`, and only on a FINAL PASS. Green CI means the gates
+ran; it is never merge authorization. The sequence, the PR reads and the conflict rule are
+`references/promote.md`.
 
-Rules that bind the dispatch:
+**One promotion SHA:** the last `VERIFIED` return's `PIN` == the PR head at merge == the
+SHA the candidate was built from == the SHA in the merge record. Any commit after that
+PIN voids the review and the FINAL exercise together, and both re-run on the new head. A
+merge record whose SHA does not match is refused.
 
-- **The opening trio — every dispatch, every depth (hard rule).** The brief
-  begins with three lines: **who the worker is** (its `STATION:` line names it),
-  **which skill to load** (`fullstack-software-development`), and **the absolute
-  path to its own guide**. From those three lines alone the worker knows its
-  role, its skill, and the guide that defines its behaviour.
-- **The brief never tells the worker how to do its job** — which tests to run,
-  which checks to perform, how to read. That is the guides' business. The brief
-  states the task, the evidence standard, and the report shape; nothing else.
-- **The branch moves under the coder between rounds; a review window freezes it.**
-  The coder commits as it works; when a review round opens, the round's tip is
-  frozen — no commits while the reviewer reads — and the round's findings,
-  receipts, and verdict bind to that SHA. Commits land between rounds.
-- **Findings-so-far (fix loops) ride in the brief** — the ranked findings being
-  addressed, so the coder addresses exactly those and nothing else.
-- **Fix loops re-dispatch the same way** — a fresh coder subagent with the
-  findings-so-far stamped into a fresh brief. There is no session to resume: the
-  worktree and the issue thread are the state.
+**Two records, or the promotion is refused:**
 
-**The report shape the brief demands** (the coder's report; the orchestrator
-presence-checks it):
+1. Slice issue: `GATE|MERGE|PASS|<sha>|<build ts>|<env ok>|<FINAL report path>|<approval ref or "none">` + `station:merged` + close.
+2. Pipeline issue: `GATE|PROMOTE|PASS|<old..new sha>`.
 
-```
-GATE|CODE|PASS|<summary line>
-- built: <one line per AC — done / how>
-- self-test: <journeys driven, real entry point named; evidence pointers; negative control result>
-- review: <rounds; findings fixed/refuted, pointers>
-- closing: <VERIFIED; report path>
-- receipts: <committed paths on the slice branch, force-added past any ignore rule>
-- changed: <file list>
-- commits: <shas on the slice branch>
-- PR: <number, url>
-- effects: <observable surfaces changed — env/config/route/schema — one line each, or "none">
-FRAMEWORK-REPORT
-- worked / broke / improve / other
-```
+Run artifacts the records cite:
 
-On a failed close or an unfinished loop the tail is `->GATE:CODE` (fix loops) or
-`BLOCKED: <decision needed>` instead of the PASS block.
+| Path | Written by |
+|---|---|
+| `docs/agents/production/run-artifacts/integrity-<slice>.md` | the promotion's deploy-integrity pass |
+| `docs/agents/production/run-artifacts/final-<slice>.md` | the FINAL exercise |
+| `docs/agents/production/run-artifacts/reviews/<slice>-r<n>.md` | the coder, committed verbatim |
+| `docs/agents/production/run-artifacts/test-<slice>.md` | the rig report at CODE |
 
-**The reviewer the coder dispatches** follows the same contract one depth down.
-The coder writes the reviewer's brief with `mattpocock-handoff`; it opens with the
-trio (its role: adversarial-code-reviewer; the skill to load; its guide:
-`<skill root>/references/coder/adversarial-code-reviewer/adversarial-code-reviewer-guide.md`).
-The brief carries only the slice's facts — the ACs, Decisions and Persisted-data
-verbatim, the coder's report, the worktree, the rig pointer — and nothing that
-shapes the verdict. The coder never biases it. The reviewer returns VERIFIED /
-CHANGES_REQUESTED / BLOCKED with findings and evidence; the coder commits the
-return verbatim with its fix round, in the same commit. The reviewer never writes
-the branch.
+`Risk tier: high` puts a recorded `APPROVAL|PROMOTE|<slice>|<artifact path>` before the
+merge; a missing approval does not reach it. The merge is the last act: squash, delete the
+branch, then read it back on GitHub — a merge that cannot be seen did not happen. `--auto`
+and `--admin` are forbidden, and `main` is never pushed directly.
 
-## Dispatch contract (the primer rule — any orchestrator-dispatched worker)
+## Presence check before posting
 
-Every orchestrator dispatch (the FINAL exercise and any bake-off candidate)
-carries, self-contained:
+Read one pointer per required section; never re-run the work.
 
-```
-STATION: <station name>
-SKILL: fullstack-software-development
-GUIDE: <path to the worker's guide, relative to the skill root>
-ARTIFACT: <worktree + BRANCH: slice/<id>, or — FINAL — the deployed candidate URL (no worktree, no branch)>
-TOOLSET: <the rig's declared instruments>   (workers hold no control-plane write access)
-BATCHING: <verbatim — the standing block above>
-PROCESSES: <verbatim — the standing block above>
-ACS / DECISIONS / RISK-HYPOTHESES / FINDINGS-SO-FAR / PERSISTED-DATA: <as the worker needs>
-JOURNEYS: <for FINAL, the candidate's touched surfaces enumerated from the slice issue — floor, never ceiling>
-REPORT SHAPE: <the worker's GATE line + evidence pointers; FINAL: GATE|FINAL|PASS|<report path> or GATE|FINAL|FAIL|<ranked findings>, followed by FRAMEWORK-REPORT>
-```
+1. Every section of the role's report shape is present and non-empty. A round report is
+   checked for its sections and its return; the open-PR check belongs to the final CODE
+   PASS.
+2. The reviewer's committed return exists at its path, and its `ROUND` and `PIN` match the
+   report.
+3. The report echoes the brief's contract version; `TEST-DIFF` is present; no P0/P1 is
+   open; the cap is not exceeded.
+4. `changed` equals `git diff --name-only <DIFF BASE>..HEAD`.
 
-A FINAL dispatch is fresh context, never a coder or reviewer of this slice; its
-guide is `references/orchestrator/final-exercise-guide.md`.
+A failed check is a failed dispatch: `STALL`, then a fresh coder. A report is never
+returned for repair and never posted unverified. Findings travel in full — a count never
+stands for the list. The reviewer's committed return owns number truth; the orchestrator
+cites it and never re-derives a number.
 
-Workers know nothing else. They never self-route, never post to GitHub, never
-choose their role — the orchestrator posts all comments and owns every stage
-transition.
+## Re-entry
 
-## GitHub verb map (orchestrator)
+A finding that contradicts a Discovery decision, a SPEC line, a seam, a gate, or a public
+contract is a Discovery error, not a slice defect. `references/re-entry.md` owns the
+procedure.
+
+- **`local`** — the slice absorbs it without changing the SPEC, a seam, a gate, or a public
+  contract. Fixed in the coder's fix round; the reviewer's round is its approval; no plan
+  gate, no new `GATE|PLAN|PASS`.
+- **`architectural`** — anything else. Post `PAUSED|<re-entry ref>` on the slice thread
+  before the targeted pass; post `RESUMED` when the superseding `GATE|PLAN|PASS` lands.
+  Disagreement is `architectural`: the conservative class wins.
+- The targeted pass updates only the affected artifacts, reruns the affected hypothesis
+  tests, takes one scoped judge, and posts a superseding `GATE|PLAN|PASS` whose approval
+  ref is the re-approval or "none — unchanged".
+- A contract change inside a re-entry is a `CONTRACT-AMENDMENT`, never an edit, and the
+  human re-approves only when scope, a public contract, or the risk tier changes.
+- An architectural re-entry never posts `GATE|CODE|FAIL`: the slice is paused, not failed.
+  An architectural re-entry without a targeted `APPROVED` leaves the slice `BLOCKED`.
+
+## LEARN
+
+After a promotion, append the outcome row and the `FRICTION:` lines to
+`docs/agents/production/lessons-learned.md` — the project instance of
+`references/lessons.md`, which owns the schema, the durable bar, and the outcome ledger.
+The orchestrator writes it, from worker reports; workers only report. Append-only, and
+reworked in place rather than overwritten. A lesson recurring across three slices compiles
+into a standing rule in `AGENTS.md`, citing the proving slices.
+
+## GitHub verb map
+
+`gh` for every issue operation; run it in the clone and it infers the repo.
 
 | Situation | Operation |
 |---|---|
-| PLAN creates a slice | `gh issue create -R HiggsBoson97/inference-engine-rasputinie --title "SLICE <id>: <objective>" --body-file <schema> --label station:code` |
-| Stage passed / failed | `gh issue comment <n> --body "<GATE line>"` + `gh issue edit <n> --add-label/--remove-label` |
-| Coder-unit dispatch | `delegate_task` to the coder subagent, the brief file on disk; `SLOT` line on the pipeline issue |
-| Stalled coder loop | stop the delegation, re-dispatch fresh with the last GATE line stamped into a fresh brief |
-| Escalation | label `escalated` + decision comment |
-| Promotion | local merge of slice branch into `main` (no branch protection — the gate is discipline), push to `origin`; deploy + integrity check; FINAL exercise; `GATE\|MERGE\|PASS` + `station:merged` + `gh issue close`; `GATE\|PROMOTE\|PASS` + `GATE\|FINAL\|PASS` on the pipeline issue |
-| Pipeline view | `gh issue list --label station:code` (and the other labels) — one query per stage |
+| PLAN creates a slice | `gh issue create --title "SLICE <id>: <objective>" --body-file <path> --label station:code` |
+| Stage passed / failed | `gh issue comment <n> --body "<GATE line>"`, then `gh issue edit <n> --add-label/--remove-label`, then read the label back |
+| Escalation | label `escalated` + `ESCALATED|<decision needed>` |
+| PR state | `gh pr view <n> --json state,mergeable,reviewDecision,headRefOid`, then `gh pr checks <n>` |
+| Protection | `gh api repos/HiggsBoson97/inference-engine-rasputinie/branches/main/protection --jq '.required_status_checks.contexts'` |
+| Promotion | `gh pr merge <n> --squash --delete-branch`, then read back `mergedAt,mergeCommit`; the two records follow |
+| Close | only through the promotion close: `station:merged` + `GATE|MERGE|PASS` + `gh issue close` |
 
-## Evidence conventions
+Create, read, list, comment, label and close are `docs/agents/issue-tracker.md`'s job;
+this table is only the loop-specific calls.
 
-- Every claim in a worker report carries an evidence pointer (file:line, command
-  output, artifact path). The orchestrator presence-checks the report before
-  posting; a report missing a required section goes back, never posted.
-- **Findings travel in full — a count never stands in for the list.** Every
-  report that carries findings carries each one with its pointer; counts are
-  headings, never substitutes.
-- **The closing check owns number truth.** The coder loop's closing pass reads
-  the machine-readable rows (the results file, receipt paths, SHAs); the
-  orchestrator cites the source row and never re-derives a number itself. A green
-  console line proves only that the build ran.
-- **Receipts ride in the same commit as the code they evidence**, on the slice
-  branch, force-added past any repo-level ignore rule. A receipt that exists only
-  in the main checkout, or only where an ignore rule swallowed it, is not a
-  receipt.
-- A speed number without its baseline in the same artifact is an opinion, not
-  evidence; `bench/results/` is the schema for both.
-- Run artifacts live in `docs/agents/production/run-artifacts/`; the GATE comment
-  points at them.
-- GitHub comments are immutable history — the audit trail needs no separate
-  ledger.
+## Evidence
 
-## Restart protocol (per slice)
+Every claim in a worker report carries a pointer: file:line, command output, or artifact
+path. A receipt is a committed file under `docs/agents/production/run-artifacts/`, riding
+in the same commit as the code it evidences on the slice branch — force-added past any
+ignore rule. A receipt that exists only in the main checkout is not a receipt.
 
-1. Reconcile the pipeline issue, the slice thread, and `git log` — the comment
-   tail is the position of record; never re-fire from memory.
-2. A stalled coder loop is a failed dispatch: stop the delegation, then
-   re-dispatch a fresh coder subagent with the ledger's findings-so-far stamped
-   into a fresh brief.
-3. Caps count from comment history.
-4. The worktree state is ground truth for what was built; the thread is ground
-   truth for what was judged.
+A number without its baseline in the same artifact is an opinion; `bench/results/` is the
+schema for both. A green console line proves only that the build ran — counts come from
+the machine-readable output. GitHub comments are immutable history, so the thread is the
+audit trail and there is no separate ledger.

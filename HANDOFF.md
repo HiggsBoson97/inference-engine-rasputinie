@@ -3,7 +3,7 @@
 One handoff, updated in place. A superseded section is deleted outright, never
 tombstoned. This file is versioned with the repo and is the canonical copy.
 
-**As of 2026-10-23 01:00 CEST.** Verify anything dated before relying on it.
+**As of 2026-10-23 15:43 CEST.** Verify anything dated before relying on it.
 
 ---
 
@@ -17,22 +17,30 @@ A bespoke LLM inference engine for **exactly one machine and one model**:
   head. 851 tensors, 26.896 B params, 3.498 bpw, 64 layers (48 GatedDeltaNet +
   16 full attention), 10.57 GiB read per token.
 
-**The governing rule was wrong and is now corrected.** It used to read "decode is
-bandwidth-bound, so bytes per token decide the ceiling". That holds at 4
-bits/weight and above. **At 3.44 bpw the ceiling is instruction issue, not
-memory** — see §1 of `docs/plan/DESIGN-instruction-budget.md`. Bytes still matter;
-they are no longer the binding constraint on this file.
+**The governing rule has now been corrected by measurement.** It read "decode is
+bandwidth-bound, so bytes per token decide the ceiling"; then "at 3.44 bpw the
+ceiling is instruction issue, so memory work is wasted". **Both are wrong.** The
+kernel at 521 GB/s uses 48.6 % of the issue slots and gains **+23.7 %** when memory
+is made free (521 → 645 GB/s), so it is neither saturated nor bandwidth-bound: it
+sits at a corner where memory costs 16.0 % of the wall and instructions cost 16.9 %.
+See `docs/plan/DESIGN-instruction-budget.md` and the evidence in
+`docs/agents/production/run-artifacts/hypotheses/H-1.md` and `H-2.md`.
 
 ## 2. Phase
 
-**PLAN.** The measurement round is closed; the plan gate has not passed. Nothing
-is built. The next unit of work is the counter test in §7, not the SPEC.
+**PLAN.** A1 is answered (refuted) and the ledger has one open row, `H-3`. The plan
+gate has not passed and nothing is built. The next unit of work is **`H-3`: prove or
+refute that the 521 → 645 GB/s gap is memory latency / MLP** — not the SPEC, and not
+another counter readout.
 
 ## 3. Read order
 
 1. [`docs/plan/DESIGN-instruction-budget.md`](docs/plan/DESIGN-instruction-budget.md)
-   — the `n` model, the three consequences, the five ISA facts, the falsifying
-   test. **This is the frontier.**
+   — **the corrected two-bound model**: 521 achieved, 645 with memory free, 776 wall;
+   why the old `n` model was void (a 32× unit error), the five ISA facts, and the
+   three falsifiers. **This is the frontier.** Its evidence is
+   `docs/agents/production/run-artifacts/hypotheses/H-1.md` (the differential
+   experiment) and `H-2.md` (the ISA census).
 2. [`docs/plan/REQUIREMENTS.md`](docs/plan/REQUIREMENTS.md) — hard constraints,
    settled rules, six open items each naming its measurement.
 3. [`docs/00-facts.md`](docs/00-facts.md) — measured physics; every number
@@ -87,6 +95,9 @@ a leftover process — check `etime` before killing, and kill by PID.
 | Models | IQ3_S 11.77 GB, IQ3_S-mtp 12.12 GB, UD-Q4_K_XL 17.56 GB (reference only), mmproj 931 MB (out of scope) |
 | Donor checkouts | `development/_research/{strata,tensorfold,freetoken,deepinfer,sglang,exllamav3}` — read-only |
 | Bench port | 30100 |
+| E1 harness | `~/e1/iq3s_valid <manifest> <gguf> <NV> <rp>`, **`GRIDMUL=8 BLK=256` → `grid=336×256`**; `GRIDMUL=4` silently halves the grid and reports 436 GB/s |
+| Manifest | `python3 ~/e1/mkmanifest.py <gguf> 30 <out>`; a 1-tensor manifest must be cut by hand (`awk 'NR==2'`) — the generator asserts ≥1 GiB and an empty manifest segfaults the harness |
+| Profiler | `rocprofv3` **1.4.1** at `/opt/rocm/bin`. Reads only `SQ_BUSY_CYCLES`, `SQ_WAVES`, `Wavefronts`; every instruction and `GL2C_*` counter is 0. See trap 16 |
 
 ## 6. Standing traps
 
@@ -127,14 +138,28 @@ Each has an incident behind it. Do not treat any as folklore.
     interleaving quant types in one CU costs −10 %, sorting costs 0.
 15. **A GGUF parse is right when arithmetic says so**: metadata + sum of tensor
     bytes must equal the file size exactly. It closes to 0 B today.
+16. **`rocprofv3` reads no instruction counter on this host.** Twenty-one counters
+    were tested against a canary with a known instruction count (100 000 dependent
+    fadds): only `SQ_BUSY_CYCLES`, `SQ_WAVES` and `Wavefronts` are populated;
+    `SQ_INSTS_VALU`, `SQ_INST_CYCLES_VALU`, `VALUInsts`, `ValuPipeIssueUtil`,
+    `OccupancyPercent` and every `GL2C_*` read **0**. SQTT/ATT gives `"code": null`.
+    A zero from this profiler is not a measurement. `rocprofv3-avail pmc-check` is
+    not a tiebreaker — it fails on the iGPU agent for every counter. (2026-10-23)
+17. **The E1 harness needs `GRIDMUL=8`.** `grid = multiProcessorCount × GRIDMUL` =
+    42 × 8 = 336. A stray `GRIDMUL=4` runs at half grid and reports `full` = 436.5
+    instead of 516–523; that looked like an unstable baseline for one session.
+18. **A kernel shorter than ~3 ms cannot be measured on this card**, whatever the
+    footprint. The L2-resident experiment at `rp=4` (0.22 ms kernels) gave 690.3 and
+    366.7 GB/s on identical input. Use `rp=64` for a 38 MB footprint. (2026-10-23)
 
 ## 7. Open — each waits on a named measurement
 
 | # | Question | Settled by |
 |---|---|---|
-| A1 | **Is IQ3_S instruction-bound?** (`n ≈ 1.57` vs budget 1.04) | `rocprofv3` issue-slot occupancy. **One counter readout; run it first.** |
-| A2 | In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S | Per-type sweep on the E1 harness — each type has its own `n` |
-| A3 | MTP acceptance on this box | Teacher-forced replay against the shipped MTP head; the highest-value measurement now, because speculation divides `n` |
+| A1 | ~~**Is IQ3_S instruction-bound?**~~ | **CLOSED 2026-10-23 — no.** Occupancy 48.6 %, not ≥ 85 %; +23.7 % when memory is made free; the `n ≤ 1.04` target was a 32× unit error. Evidence: `H-1.md`, `H-2.md`. Replaced by A1b. |
+| **A1b** | **What costs the 521 → 645 GB/s gap?** Hypothesis: latency/MLP — 43 % of the body is `s_waitcnt`+`s_delay_alu`, and 21 global loads per 32 weights against `k_read`'s 5. | Ledger row **`H-3`**: a variant with wider outstanding loads per wave, accepting `full` ≥ 600 GB/s at 1.0700 GiB with the gate VALID. |
+| A2 | In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S | Per-type sweep on the E1 harness — each type has its own instruction count and therefore its own two-bound corner |
+| A3 | MTP acceptance on this box | Teacher-forced replay against the shipped MTP head; the highest-value measurement now, because speculation divides per-token work by the acceptance length and pays off whichever resource binds |
 | A4 | Topology | **Answered for IQ3_S: DP=2.** PP=2 if a larger quant is used; TP needs a sub-6 µs all-reduce. Remaining gate: mapped-memory round-trip latency |
 | A5 | The ~800 MiB anomaly's true cause | The clock-pinned re-run (trap 7) |
 | A6 | Does runtime adaptation earn its complexity | An ablation build per mechanism |
@@ -143,53 +168,58 @@ Each has an incident behind it. Do not treat any as folklore.
 
 ## 8. The research prompt to run next
 
-Copy this verbatim into a fresh session. It is the frontier as of `n = 1.57`.
+Copy this verbatim into a fresh session. It is the frontier as of the corrected
+two-bound model: 521 achieved, 645 with memory free, 776 wall.
 
 ```
-Prove or refute that this engine is instruction-issue-bound, then price the
-three levers that follow. Every number from a command; every probe
-checksum-gated and committed.
+Prove or refute that the 521 -> 645 GB/s gap is memory latency, then price the
+two levers that follow. Every number from a command; every probe checksum-gated
+and committed.
 
-1. INSTRUCTION CENSUS. Disassemble the IQ3_S dequant-GEMV
-   (llvm-objdump -d --mcpu=gfx1100) and count VALU instructions per 4
-   weights, split by role: index formation, sign application, scale
-   application, dot. Report n. Then run it under rocprofv3 and report
-   issue-slot occupancy, TCC_EA reads and L2 sector counts.
-   Claim to test: n ~ 1.57, issue occupancy >= 85%, therefore memory tuning
-   cannot move this kernel.
+1. LATENCY EXPOSURE. The kernel is 193 instruction words per 32 weights, of which
+   19 s_waitcnt and 31 s_delay_alu, and it issues 21 global-memory instructions
+   per 32 weights against k_read's 5 (which reaches 743.7 GB/s at the same
+   footprint). Build a variant that widens outstanding loads per wave -- unroll
+   the row loop so 2-4 block groups are in flight -- at fixed footprint,
+   footprint gate and GRIDMUL=8. Claim to test: the gap is latency, not
+   bandwidth. Acceptance: full >= 600 GB/s at 1.0700 GiB, gate VALID.
 
-2. REDUCE n. Three variants, each at 1.07 GiB with the E1 checksum gate:
-   (a) current branch-free SWAR sign path; (b) signs folded into a 512-entry
-   LUT at load so application is one lookup; (c) scale amortised over 256
-   weights. Target n <= 1.04, which is what 776 GB/s requires at 3.44 bpw.
-   Report GB/s and n per variant, and the n-reduction attributable to each.
+2. FIELD LOADS. Merge the four odd-sized block fields into one aligned 16 B read
+   per lane group (a load-time permutation only; bytes unchanged). Report the
+   drop in global-memory instructions per 32 weights and the GB/s it buys.
 
-3. PRICE SPECULATION. Teacher-forced replay against the shipped MTP head to
-   get the acceptance distribution on our own prompts -- no engine needed.
-   Apply the depth rule run^k >= (tokens/ms)*row(k) to pick draft depth.
-   Report effective tokens per weight sweep and the n it implies. Claim: at
-   >= 2.5 tokens/sweep the kernel returns to memory-bound.
+3. SIGN PATH. (a) current branch-free SWAR; (b) signs folded into a 512-entry LUT
+   at load; (c) scale amortised over 256 weights. Report GB/s AND instruction
+   words per 32 weights per variant. Measured fact to respect: deleting the sign
+   path is worth +13.8% at DRAM but only +7.3% with memory free, so judge every
+   variant at 1.0700 GiB, never in cache.
 
-4. SETTLE THE TWO-CARD QUESTION IN ROUND-TRIPS, NOT BYTES. Measure mapped
-   pinned-memory flag round-trip latency on this box (GPU publishes, GPU
-   spins). Then price: replication (0 round-trips), TP=2 (128 all-reduces
-   of 10 KiB), pipeline (1 handoff of 10 KiB per token). Report which wins
-   at the measured latency and whether a 1 ms round-trip flips it.
+4. PRICE SPECULATION. Teacher-forced replay against the shipped MTP head to get
+   the acceptance distribution on our own prompts -- no engine needed. Apply the
+   depth rule run^k >= (tokens/ms)*row(k) to pick draft depth. Report effective
+   tokens per weight sweep.
 
-5. VALIDATE THE INSTRUMENT. Reproduce 776 GB/s with code that shares nothing
-   with the current probe: a write-only kernel and a different stride.
-   >5% disagreement means the wall is wrong and items 1-3 must be re-read.
+5. REPAIR OR REPLACE THE INSTRUMENT. Find a profiler build on this ROCm 10.1 /
+   gfx1100 host that reads SQ_INSTS_VALU and GL2C_MC_RDREQ_sum -- rocprof v1,
+   another rocprofiler-sdk, or a pinned rocprofv3. Do NOT block items 1-3 on it:
+   the differential method needs no profiler. If it cannot be repaired, record
+   that and move on.
 
-Deliver: the n table, the counter readout, the three variants' GB/s,
-the acceptance distribution, the latency number, and a verdict per item.
-Do not tune memory until item 1 returns.
+6. VALIDATE THE WALL. Reproduce 776 GB/s with code that shares nothing with the
+   current probe: a write-only kernel and a different stride. >5% disagreement
+   means the wall is wrong and every percentage above must be re-read.
+
+Deliver: the GB/s table per variant at 1.0700 GiB, the instruction words per 32
+weights per variant, the latency verdict, the acceptance distribution, the
+instrument status, and a verdict per item. Do not tune layout, page size or
+coalescing: read is already at 96% of the wall.
 ```
 
 ## 9. Research assets, and what each is for
 
 | Path | Use it for |
 |---|---|
-| `docs/research/2026-10-23/s3-amd-sinks.md` | **the instruction-issue model**, VOPD limits, I-cache, page size, memory hints, queue behaviour — 42 sourced URLs |
+| `docs/research/2026-10-23/s3-amd-sinks.md` | the ISA survey: VOPD limits, I-cache, page size, memory hints, queue behaviour — 42 sourced URLs. Read it for the **ISA facts**, not for an issue model |
 | `docs/research/2026-10-23/s4-topologies.md` | every two-card strategy priced per token: DP=2 = PP=2 = 2×, TP=2 = 1.47× |
 | `docs/research/2026-10-23/s2-tensorfold-freetoken.md` | TensorFold's measured MTP depth rule; why the codebooks are not the cost; the LUT-instead-of-SWAR observation |
 | `docs/research/2026-10-23/s1-strata.md` | the GPU-publish/pre-launched-acquire handoff (~200 lines) and the measured **690:1 latency-to-bytes** ratio for a host-mediated boundary |
@@ -201,19 +231,34 @@ Do not tune memory until item 1 returns.
 
 ## 10. Skills for the next session, in order
 
-1. `fullstack-software-development` → `references/orchestrator/plan-guide.md`
-   (PLAN is the open stage).
-2. `get-deeper` before any design document. The instruction-budget finding came
-   from exactly that move and would not have surfaced from a broader brief.
+1. `fullstack-software-development` → `references/discovery.md` and
+   `references/orchestrator.md` (PLAN/Discovery is the open stage; v10 has no
+   separate `plan-guide.md`).
+2. `get-deeper` before any design document. The unit check that killed the `n`
+   model — and the differential experiment that replaced it — both came from
+   exactly that move.
 3. `mattpocock-research` for any lane reading primary sources.
 4. `adversarial-judge-stress` for the plan gate, dispatched fresh.
 5. `mattpocock-handoff` for the next handoff.
 
 ## 11. One caution about workers
 
-Four independent subagents in this session produced confident output that was
+Four independent subagents in a prior session produced confident output that was
 wrong or in breach: one built llama.cpp, one reported 230 % of the wall, one
 reintroduced a rule that had been disproven, one recorded an open question as
 settled. Each was caught by an independent check — a rebuild, a checksum, a
 re-read. **Budget verification time, and never accept a subagent's number into
 the record without reproducing it.**
+
+Two more on 2026-10-23, both in this section's spirit:
+
+- A probe wrote its own disassembler and re-derived a census another probe was
+  already producing, instead of stopping when its named counter read zero. The
+  stop-and-report rule in the brief is the thing that was missing; it is now in
+  every brief.
+- A probe reported `full` = 436.5 GB/s and called the baseline unstable. It had
+  inherited a stray `GRIDMUL=4`. **Check the harness's printed config line against
+  the published one before believing any % of wall.**
+
+The instrument failure (trap 16) was found by asking for a *known quantity* —
+a canary with a countable instruction stream — not by reading a report.

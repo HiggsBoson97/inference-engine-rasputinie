@@ -21,12 +21,17 @@ may be either: resolve with `gh pr view 42`, then fall back to
 
 Created on the repo; do not invent a fifth stage label.
 
-| Label | Meaning | Set by |
+| Label | Set | Clear |
 |---|---|---|
-| `station:code` | slice open — in the coder loop, or passed and awaiting promotion | orchestrator at dispatch, and after any FAIL |
-| `station:merged` | final gate passed and promoted to `main` | orchestrator at promotion close |
-| `escalated` | needs a user decision | orchestrator, with a comment naming the decision |
-| `blocked-spec` | a spec gap was discovered | orchestrator, with the gap evidence |
+| `station:code` | at dispatch | at `GATE\|CODE\|PASS`; a passed slice awaits promotion unlabeled |
+| `station:merged` | at `GATE\|MERGE\|PASS` | never |
+| `escalated` | at an escalation, with a comment naming the decision | when the decision is recorded |
+| `blocked-spec` | at an architectural re-entry, with the gap evidence | at `RESUMED`, or a superseding PLAN line naming the slice |
+
+The labels are a **view of the comment tail**, never the position itself: the tail
+decides, a contradicting label is an anomaly fixed before any dispatch, selection reads
+open issues rather than labels, and every label write is read back. The rules are in
+`docs/agents/control-plane.md`.
 
 The stock GitHub labels (`bug`, `documentation`, `enhancement`, …) exist too and
 may be added for humans browsing the repo; they carry no loop meaning and the
@@ -53,11 +58,9 @@ position of record.
 
 ## Wayfinding operations
 
-This repo's map is in-file: [MAP.md (removed)](../../MAP.md (removed)), a wayfinder map whose
-tickets are decisions rather than build steps. Resolve a ticket by appending to
-its `## Decisions so far` table in that same file, in the same commit as the
-evidence. Publish a map as an issue (`.scratch`-free, GitHub-native) only when
-the work outgrows one file; then:
+This repo keeps no in-file wayfinder map: a map lives as a GitHub issue from the start.
+When the work outgrows one sitting and Discovery's fog test sends it to
+`mattpocock-wayfinder`, publish it GitHub-native (`.scratch`-free):
 
 - **Map**: a single issue labelled `wayfinder:map` holding Notes / Decisions-so-far / Fog. `gh issue create --label wayfinder:map`.
 - **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues are not enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, assign it to the driving dev.
