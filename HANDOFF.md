@@ -3,7 +3,7 @@
 One handoff, updated in place. A superseded section is deleted outright, never
 tombstoned. This file is versioned with the repo and is the canonical copy.
 
-**As of 2026-10-23 16:52 CEST.** Verify anything dated before relying on it.
+**As of 2026-10-23 17:40 CEST.** Verify anything dated before relying on it.
 
 ---
 
@@ -13,131 +13,130 @@ A bespoke LLM inference engine for **exactly one machine and one model**:
 
 - **Machine:** 2× AMD RX 7900 XT (gfx1100, RDNA3, 19.98 GiB each, no peer DMA),
   60 GiB DDR5, one node. Read wall **776 GB/s** per card.
-- **Model:** `ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF`, **IQ3_S**, with its MTP
-  head. 851 tensors, 26.896 B params, 3.498 bpw, 64 layers (48 GatedDeltaNet +
-  16 full attention), 10.57 GiB read per token.
+- **Model:** `ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF`, **IQ3_S**, with its MTP head.
+  851 tensors, 26.896 B params, 3.498 bpw, 64 layers (48 GatedDeltaNet + 16 full
+  attention), 10.57 GiB read per step. **11 quant types, not one** — IQ3_S is 31 % of
+  the bytes; IQ4_XS 25.7 %, IQ3_XXS 17.6 %, Q4_K 13.5 %, IQ2_S 6.8 %.
+- **GSQ-RCO is a method, not a container format.** The publisher's card says the files are
+  *standard GGUF that run unmodified in llama.cpp*; GSQ learns grid assignments and group
+  scales, RCO picks the quant type per tensor under a size budget. So there is no custom
+  block layout to parse — what is file-specific is the **recipe**, which the publisher ships
+  as `tensor-allocation/*.rco-allocation.txt`.
 
-**The governing rule has now been corrected by measurement.** It read "decode is
-bandwidth-bound, so bytes per token decide the ceiling"; then "at 3.44 bpw the
-ceiling is instruction issue, so memory work is wasted". **Both are wrong.** The
-kernel at 521 GB/s uses 48.6 % of the issue slots and gains **+23.7 %** when memory
-is made free (521 → 645 GB/s), so it is neither saturated nor bandwidth-bound: it
-sits at a corner where memory costs 16.0 % of the wall and instructions cost 16.9 %.
-See `docs/plan/DESIGN-instruction-budget.md` and the evidence in
-`docs/agents/production/run-artifacts/hypotheses/H-1.md` and `H-2.md`.
+**Three corrected rules, each measured, each previously recorded wrong:**
 
-**And no shape is the target.** The owner has never named a session count or a context
-length, so no `B × C` is "the operating point". Every per-token cost is a function of the
-shape, and what governs the plan is the **surface**: `docs/plan/COST-LEDGER.md` derives the
-two boundaries — KV overtakes the weights at `B × C ≈ 173K` resident tokens (bf16 KV), and
-the GDN state overtakes them at ~36 concurrent sequences. Optimising for a point on that
-surface is the failure `AGENTS.md` principle 1 names.
+1. **Decode is not bandwidth-bound and not instruction-bound.** The kernel at 521 GB/s uses
+   48.6 % of the issue slots and gains **+23.7 %** when memory is freed (521 → 645 GB/s), so
+   it sits at a corner: memory costs 16.0 % of the wall, instructions 16.9 %. See
+   `docs/plan/DESIGN-instruction-budget.md`, evidence `H-1.md`/`H-2.md`.
+2. **No shape is the target.** The owner has never named a session count or a context length.
+   Every per-token cost is a function of `(B, C)`; what governs the plan is the **surface**
+   (`docs/plan/COST-LEDGER.md`), not a point on it.
+3. **The engine is the artifact.** Every rate on record before 2026-10-23 came from scratch
+   harnesses over 30 concatenated tensors. They exercise no layer sequence, dispatch, GDN
+   recurrence, KV path or second card. Work now happens **in `engine/`**.
 
-## 2. Phase
+## 2. Phase — Discovery, and it is not finished
 
-**PLAN.** A1, A2 and A3 are answered. Open rows: `H-3` (latency/MLP), `H-6` (two-card round
-trip, brief written, GPU now free), `H-7` (grids + recipe), `H-8` (attention path). The plan
-gate has not passed and nothing is built.
+No SPEC, no slices, no rig, no plan gate. That is deliberate: the owner's position is that a
+SPEC written before the engine teaches us anything would encode five invented premises. The
+SPEC is Discovery's output, not its input.
 
-Two measurements landed on 2026-10-23 and both cut numbers that were recorded:
+**Closed by measurement (2026-10-23):**
 
-- **A2/H-4:** the 752 GB/s assumption for the non-IQ3_S bytes is **30–40 % too high** where it
-  was measured. Whole-file decode re-derives from 56.0 to **47.1 tok/s** (a 19 %
-  overstatement), and is still an upper bound over 24.5 % of the bytes that could not be
-  gated. Load floors are all 82–85 % of wall; no layout penalises the read.
-- **A3/H-5:** the MTP head costs **65.6 % of a weight sweep** for 7 draft tokens — 1.064 GB
-  per token, because it re-reads the LM head each pass. DFlash2 costs 15.8 % at 4.5 bpw and is
-  **flat in block size**. DFLASH is already first-class in the vendored tree, Triton, with an
-  explicit ROCm fallback. Recommendation: MTP first, DFlash2 second, but build the verify path
-  for the block from day one.
+| | finding |
+|---|---|
+| **A1** | Not issue-bound. 48.6 % occupancy; +23.7 % when memory is freed; the `n = 1.57` model was a 32× unit error, back-solved from the measurement. `H-1`, `H-2` |
+| **A2** | The 752 GB/s assumption for non-IQ3_S bytes was **30–40 % too high**. Whole-file decode **56.0 → 47.1 tok/s**. Load floors 637–660 GB/s with no layout penalty; dot rates IQ4_XS 502.1, Q4_K 452.2; IQ3_XXS and IQ2_S **could not be gated**. `H-4` |
+| **A3** | MTP head costs **7.445 GB per 7-token step = 65.6 % of a weight sweep** (it re-reads 0.666 GiB of LM head per draft). DFlash2 4.5 bpw costs 15.8 % and is flat in block size. DFLASH is already first-class in the vendored tree, Triton, with an explicit ROCm fallback. `H-5` |
+| **H-9** | `ms(k) = 1.764 + 0.588k` on 1.0700 GiB of IQ3_S. **The marginal verification cost is flat at 0.51–0.72 ms with no knee**, so verification does not limit depth — **the drafter does.** Whole-file budget per drafted token ≈ 3.87 ms: MTP uses 53 %, DFlash2 BF16 32 %, DFlash2 4.5 bpw 13 % |
+| **H-10** | **The engine cannot serve this file on ROCm at all.** Four ordered blockers, plus the deletion map. See §2.1 |
 
-The frame for what comes next is `docs/plan/COST-LEDGER.md`: rank measurements by the term
-they address, over the shape surface, never at a point. Its queue puts the **verify-width
-cost curve** first, then the **attention path**, then the round trip, then prefill.
+**Open:** `H-3` (what costs the 521→645 gap — latency/MLP), `H-6` (two-card round trip),
+`H-7` (grid tables + the publisher's recipe — a *correctness* blocker), `H-8` (the attention
+path has no kernel and no rate), `H-11` (engine bring-up — **interrupted mid-task**, see §4).
+Plus one question not yet a row: prefill/TTFT (~1.6–3.2 s for 4K, deferred by `S1`).
 
-**Strategy shift, 2026-10-23 (owner direction): measure in the engine, not in scratch
-harnesses.** Every rate on record so far came from `~/e1`, `~/a2`, `~/a9` — hand-cut manifests
-of 30 concatenated tensors, which exercise none of the layer sequence, dispatch, GDN
-recurrence, KV path or second card. That is a proxy, and the work now moves into `engine/`:
-strip it to what this model and this card need, then optimise in situ. `H-10` is the baseline
-(does the vendored sglang serve this GGUF on ROCm, which dequant path, at what tok/s) plus the
-deletion map. Scratch harnesses remain valid only for questions the engine cannot yet answer.
+### 2.1 The engine facts that decide the next work
 
-The decisive engine facts, measured (`H-10`, 2026-10-23):
-
-- **The engine cannot serve this file on ROCm at all.** Four ordered blockers: `aiter`
-  imported at module scope under `if _is_hip` and not installed → `model_config` will not
-  import; `ModelConfig` hard-refuses GGUF on ROCm (`model_config.py:2128-2133`); on HIP
-  `gguf.py` has no import branch, so the five `ggml_*` names are undefined; and the ops are
-  absent from the ROCm wheel (0 of 47 `sgl_kernel` ops are ggml).
-- **At batch 1 the engine wants MMVQ** (`ggml_mul_mat_vec_a8`), not the dequant→bf16 path —
-  that path is taken only at ≥ 9 tokens. So the target kernel is the **fused int8 GEMV**,
-  which is exactly the E1 harness's kernel.
-- **The CUDA source does not port by wiring.** `__dp4a` is *undeclared* for gfx1100 in this
-  toolchain (verified: `use of undeclared identifier '__dp4a'`), so `vecdotq.cuh`'s dp4a sites
-  must be rewritten to inline-asm `v_dot4_i32_i8` — the technique E1 already proved. **But the
-  C++ route is closed anyway:** aiter is dead on this card and Triton is the working backend
-  (`AGENTS.md` hard rule 4, trap 22). The open question this leaves: a Triton IQ3_S GEMV has
-  not been measured, and it may not reach the 521 GB/s the hand-written asm kernel reaches.
-  `REQUIREMENTS.md` S4 still says every device-touching hot path is native — so "bring up on
-  Triton, replace the hot kernel natively later" is the reconciling reading, not "Triton
-  forever".
-- **The deletion surface is real:** of 8,338 measured files, **5,363 are dead on any path**
-  (1.48 M LOC), 27 are CUDA-gated, 1,422 lazy-only, and **1,070 are the live runtime closure**
-  (455 k LOC).
+- **Four ordered blockers, all verified:** (1) `aiter` imported at module scope under
+  `if _is_hip` and not installed → `model_config` will not import; (2) `ModelConfig`
+  hard-refuses GGUF on ROCm (`configs/model_config.py:2128-2133`); (3) on HIP
+  `layers/quantization/gguf.py` has no import branch, so the five `ggml_*` names are
+  undefined; (4) the ops are absent from the ROCm wheel — 0 of 47 `sgl_kernel` ops are ggml,
+  `nm common_ops.so` = 0 ggml symbols, `setup_rocm.py` lists no gguf source.
+- **At batch 1 the engine wants MMVQ** (`ggml_mul_mat_vec_a8`), a fused int8 GEMV. The
+  dequant→bf16 path is only reached at ≥ 9 tokens. **So the kernel the engine needs is the
+  one E1 already built** — it just isn't inside the engine yet.
+- **`__dp4a` is undeclared for gfx1100** in this toolchain (verified with a two-line test:
+  `error: use of undeclared identifier '__dp4a'`), so `vecdotq.cuh`'s ~45 call sites cannot
+  compile as-is. The C++ route is closed anyway — see hard rule 4 in `AGENTS.md`: **aiter is
+  dead here, Triton is the only working backend.**
+- **Deletion surface, measured over 8,338 files:** **5,363 dead on any path (1.48 M LOC)**,
+  27 CUDA-gated, 1,422 lazy-only, **1,070 live (455 k LOC)**; 456 C++ files execute nothing
+  but are the source of the missing ops.
 
 ## 3. Read order
 
 1. [`docs/plan/COST-LEDGER.md`](docs/plan/COST-LEDGER.md) — **the frame**: every per-token
    term as a function of `(B, C)`, the two boundaries, term provenance, and the ranked
-   measurement queue. Read this before proposing any optimisation.
-2. [`docs/plan/DESIGN-instruction-budget.md`](docs/plan/DESIGN-instruction-budget.md)
-   — **the corrected two-bound model**: 521 achieved, 645 with memory free, 776 wall;
-   why the old `n` model was void (a 32× unit error), the five ISA facts, and the
-   three falsifiers. Its evidence is
-   `docs/agents/production/run-artifacts/hypotheses/H-1.md` (the differential
-   experiment) and `H-2.md` (the ISA census).
-3. [`docs/research/2026-10-23/s5-donor-transfer.md`](docs/research/2026-10-23/s5-donor-transfer.md)
-   — what to import from the six donor engines and what is dead on this card, each row
-   with the artifact read and the gate it must pass.
-4. [`docs/plan/REQUIREMENTS.md`](docs/plan/REQUIREMENTS.md) — hard constraints,
-   settled rules, eight open items each naming its measurement.
-5. [`docs/00-facts.md`](docs/00-facts.md) — measured physics; every number
-   derives from it.
-6. [`docs/03-native-kernel-inventory.md`](docs/03-native-kernel-inventory.md) —
-   the kernel set, keyed `(role, type)` = 72 pairs.
-7. [`docs/plan/RECORD.md`](docs/plan/RECORD.md) — standing records, measured vs
-   estimated, and the shapes that still have no number (records, not targets).
-8. [`docs/plan/DECISION-packaging-iq3s.md`](docs/plan/DECISION-packaging-iq3s.md)
-   and [`DESIGN-batch-regimes.md`](docs/plan/DESIGN-batch-regimes.md) — serve the
-   file as published; fuse 2–4 layers per launch.
+   measurement queue. Read before proposing any optimisation.
+2. [`AGENTS.md`](AGENTS.md) — the four hard rules (llama.cpp, FP8, the loop, **aiter/Triton**)
+   and the eleven principles. Short, and it is the constitution.
+3. [`docs/plan/DESIGN-instruction-budget.md`](docs/plan/DESIGN-instruction-budget.md) — the
+   corrected two-bound model: 521 achieved, 645 memory-free, 776 wall; why the old `n` model
+   was void; the five ISA facts; the three falsifiers.
+4. [`docs/research/2026-10-23/s5-donor-transfer.md`](docs/research/2026-10-23/s5-donor-transfer.md)
+   — what to import from the six donor engines and what is dead on this card, per row with
+   the artifact read and the gate it must pass.
+5. [`docs/plan/REQUIREMENTS.md`](docs/plan/REQUIREMENTS.md) — hard constraints, settled
+   rules, and the open items each naming its measurement.
+6. [`docs/plan/RECORD.md`](docs/plan/RECORD.md) — every measured rate, with provenance and
+   the "superseded" rows marked.
+7. [`docs/00-facts.md`](docs/00-facts.md) — measured physics; every number derives from it.
+8. [`docs/03-native-kernel-inventory.md`](docs/03-native-kernel-inventory.md) — the kernel
+   set, 72 `(role, type)` pairs.
 9. ADRs 0002 (fork), 0003 (representation), 0004 (FP8 excluded); `decisions/0001`
    (llama.cpp excluded).
-10. [`docs/research/README.md`](docs/research/README.md) indexes the rounds and says which
-    conclusions are superseded. **`2026-10-23/` is current; `s3`'s issue model is refuted.**
+10. [`docs/research/README.md`](docs/research/README.md) — the index, with the correction
+    banner: `s3`'s instruction-issue model is **refuted**, its ISA facts stand.
 
 ## 4. State, and the first check
 
 ```bash
 cd "$REPO" && git log --oneline -1 && git status --short
-ssh rasputin 'cd ~/development/inference-engine-rasputinie && git log --oneline -1 && git status --short'
-for c in /sys/class/drm/card[0-9]*; do [ -f "$c/device/mem_info_vram_used" ] && \
-  printf "%s %sMiB\n" "$(readlink -f $c/device | sed 's|.*/||')" \
-  "$(( $(cat $c/device/mem_info_vram_used)/1024/1024 ))"; done
+ssh rasputin 'cd ~/development/inference-engine-rasputinie && \
+  git branch --show-current && git log --oneline -1 && git status --short'
 ```
 
-Clean on both sides means matching tips and empty status. **Idle GPUs are
-26 MiB (07:00.0), ~99 MiB (03:00.0), ~15 MiB (12:00.0, iGPU).** Far above that is
-a leftover process — check `etime` before killing, and kill by PID.
+Clean on both sides means matching `main` tips and empty status.
+
+**As of the write of this file:** both `main` at `35939842`, both trees clean.
+**The host is checked out on branch `engine/bringup` at `bb39bf0f`, not `main`** — two
+commits that are **unrun and unverified**:
+
+| sha | what |
+|---|---|
+| `79157797` | `engine: remove aiter from the reachable path on gfx11` — 4 files, a helper in `utils/common.py` |
+| `bb39bf0f` | `engine: WIP, UNVERIFIED — honest ROCm GGUF gate` — probes for `ggml_mul_mat_vec_a8` instead of deleting the refusal |
+
+The branch exists because the probe writing it was interrupted before it constructed a
+`ModelConfig`. **Review or delete it before building on it.** `main` is untouched by it.
+
+**The host's git identity is repo-local and was unset** — a commit there fails with
+`Author identity unknown`. It is now set in that clone to `HiggsBoson97
+<mattia.6131@gmail.com>`, matching the existing history. A fresh clone will need it again.
 
 | | |
 |---|---|
 | Repo | public, `HiggsBoson97/inference-engine-rasputinie` |
-| Remotes | `origin` = bare repo **on the host**; `github` = public |
-| Branch | `main`; branch protection is **available now the repo is public, not yet enabled** — enable it before the first dispatch |
-| Host tree | clean clone, synced |
+| Remotes | `origin` = bare repo **on the host**; `github` = public. Both `main`s pushed each time |
+| Branch protection | available (repo is public), **not enabled** — enable before the first dispatch |
 | Staging | `../rasputinie-plan/` — the repo copies are authoritative |
-| Environment | venv `~/venv/sglang-fork`, wheel `~/wheels/sglang_kernel-0.4.10-…whl`, 69 GB models — all outside the repo |
+| Environment | venv `~/venv/sglang-fork`, wheel `~/wheels/sglang_kernel-0.4.10-…whl`, 69 GB models — outside the repo |
+
+Idle GPUs are **26 MiB (07:00.0), ~88 MiB (03:00.0), 15 MiB (12:00.0 iGPU)**. Far above that
+is a leftover process — check `etime` before killing, and kill by PID.
 
 ## 5. Baseline, exactly
 
@@ -145,212 +144,189 @@ a leftover process — check `etime` before killing, and kill by PID.
 |---|---|
 | Repo (Mac) | `/Volumes/Crucial X9 Pro 2TB/Personal/tailscale/rasputin/development/inference-engine-rasputinie` |
 | Repo (host) | `/home/mattia-bosi/development/inference-engine-rasputinie` |
-| SSH | `ssh rasputin`, port **8374**, user `mattia-bosi`, `sudo -n` |
-| Engine source | `engine/` — vendored sglang `d0a7565`, 11,063 files, complete |
-| Python | `~/venv/sglang-fork/bin/python` — 3.12.15, torch 2.14.1+rocm7.2, HIP 7.2.53211, sglang 0.5.9, sgl_kernel 0.4.10 |
-| ROCm | 10.1 under `/opt/rocm/core-10.1`; hipcc 7.16 / clang 24; dev packages `amdrocm-{runtime,core,blas}-dev10.1` **required** |
-| GPU mapping | **HIP 0 = amd-smi 0 = sysfs card1 = PCI 03:00.0 = display**; HIP 1 = amd-smi 1 = sysfs card0 = PCI 07:00.0 = headless |
+| SSH | `ssh rasputin`, port **8374**, user `mattia-bosi`, `sudo -n` (NOPASSWD) |
+| Engine | `engine/` = vendored sglang `d0a7565`, **installed editable from `engine/python`** — the vendored tree *is* the running engine, no install step |
+| Python | `~/venv/sglang-fork/bin/python` — 3.12.15, torch 2.14.1+rocm7.2, HIP 7.2.53211, sglang 0.5.9, sgl_kernel 0.4.10, triton 3.8.0 + triton-rocm 3.8.0 |
+| ROCm | 10.1 under `/opt/rocm/core-10.1`; hipcc 7.16 / clang 24 |
+| GPU mapping | **HIP 0 = amd-smi 0 = sysfs card1 = PCI 03:00.0 = display**; HIP 1 = card0 = PCI **07:00.0** = headless |
 | Use this card | **`HIP_VISIBLE_DEVICES=1` → PCI 07:00.0** |
 | Models | IQ3_S 11.77 GB, IQ3_S-mtp 12.12 GB, UD-Q4_K_XL 17.56 GB (reference only), mmproj 931 MB (out of scope) |
 | Donor checkouts | `development/_research/{strata,tensorfold,freetoken,deepinfer,sglang,exllamav3}` — read-only |
-| Bench port | 30100 |
-| E1 harness | `~/e1/iq3s_valid <manifest> <gguf> <NV> <rp>`, **`GRIDMUL=8 BLK=256` → `grid=336×256`**; `GRIDMUL=4` silently halves the grid and reports 436 GB/s |
-| Manifest | `python3 ~/e1/mkmanifest.py <gguf> 30 <out>`; a 1-tensor manifest must be cut by hand (`awk 'NR==2'`) — the generator asserts ≥1 GiB and an empty manifest segfaults the harness |
-| Profiler | `rocprofv3` **1.4.1** at `/opt/rocm/bin`. Reads only `SQ_BUSY_CYCLES`, `SQ_WAVES`, `Wavefronts`; every instruction and `GL2C_*` counter is 0. See trap 16 |
-| Memory terms | **VRAM** = the card's GDDR6, 19.98 GiB, where the 776 GB/s wall is measured. **L2** = 96 MB on-die. **Host RAM** never appears in a timed path — no spill, no managed allocation. A "DRAM arm" in an older report means VRAM, not system memory |
-| Two-card link | PCIe 4.0 ×16, **no peer-to-peer DMA**. RCCL 2-rank all-reduce measured at **20.65 µs** amortised for 5120 elems, with a **~19.5 µs floor** up to 16 KiB that no `NCCL_*` setting improves; `pynccl` is ~2× cheaper than `torch.distributed` — never benchmark TP with the latter (`docs/research/18-tp-roccl.md`) |
+| E1 harness | `~/e1/iq3s_valid <manifest> <gguf> <NV> <rp>`, **`GRIDMUL=8 BLK=256` → `grid=336×256`**; `GRIDMUL=4` halves the grid and reports 436 instead of 521 |
+| Manifest | `python3 ~/e1/mkmanifest.py <gguf> 30 <out>`; a 1-tensor manifest must be cut by hand (`awk 'NR==2'`) — the generator asserts ≥1 GiB and an empty manifest segfaults |
+| Profiler | `rocprofv3` 1.4.1 at `/opt/rocm/bin`. Reads only `SQ_BUSY_CYCLES`, `SQ_WAVES`, `Wavefronts`; every instruction and `GL2C_*` counter is 0 (trap 16) |
+| Memory terms | **VRAM** = the card's GDDR6, where the 776 GB/s wall is measured. **L2** = 96 MB on-die. **Host RAM never appears in a timed path** — no spill, no managed allocation |
+| Two-card link | PCIe 4.0 ×16, **no peer DMA**. RCCL all-reduce **20.65 µs** amortised at 10 KiB, **~19.5 µs floor** not tunable by `NCCL_*`; `pynccl` ~2× cheaper than `torch.distributed` |
+| **Key measured rates** | IQ3_S `full` **521.3** (67 %) · memory-free ceiling **645.1** (83 %) · wall **776** · `read` 743.7 · IQ4_XS 502.1 · Q4_K 452.2 · whole file **47.1 tok/s** (estimate) |
+| **Verify curve** | `ms(k) = 1.764 + 0.588k` per 1.07 GiB slice; marginal flat 0.567 ms; whole-file marginal ≈ 5.40 ms/token |
+| **Drafter cost** | MTP 2.04 ms per draft token (53 % of the 3.87 ms budget) · DFlash2 BF16 1.25 (32 %) · DFlash2 4.5 bpw **0.49 (13 %)** |
 
 ## 6. Standing traps
 
 Each has an incident behind it. Do not treat any as folklore.
 
-1. **HIP 0 is the display card.** A load test there caused a `ring gfx_0.0.0`
-   timeout under gnome-shell. Always `HIP_VISIBLE_DEVICES=1` for single-card work.
-2. **llama.cpp is excluded** — no baseline, no reference, no derived code, not
-   installed. A research subagent cloned and built it on 2026-10-23 anyway and it
-   had to be deleted. **Name this rule in every dispatch brief.**
-3. **FP8 is excluded as a format** (ADR 0004). The 857 ms/token run is evidence
-   for the exclusion, never a baseline.
-4. **619 GB/s was never the wall** — a 1.6 ms kernel artefact. The wall is
-   **776 GB/s**. Any ceiling derived from 619 is wrong.
-5. **Below ~4 bits/weight the format is instruction-bound.** IQ3_S needs
-   `n ≤ 1.04` and measures 1.57. **Do not tune memory on it.** See §1.
-6. **Kernels must be checksum-gated.** A probe without a data-dependent checksum
-   reported 1784 GB/s — 230 % of the wall — because the compiler hoisted the
-   loads. A fast wrong kernel is worse than a slow right one.
-7. **The ~800 MiB "footprint cliff" is probably the clock ramp.** E2 named it a
-   cliff; the arithmetic says 800 MiB ÷ 750 GB/s = 1.12 ms, i.e. a fixed ~230 µs
-   stops being amortised there. Pin clocks and re-run before designing around it.
-8. **`pkill -f <pattern>` matches your own ssh command line** and kills the shell
-   running it. Kill by PID.
-9. **Runtime Triton compiles stall the first requests** — 1–2 s per kernel, 16.5 s
-   for one. Warm-up is not optional.
-10. **No `hf`, `git-lfs`, `uv`, `pipx` or `rocm-smi` on the host.** Downloads are
-    HTTP + `xargs -P4 curl`; clocks are `amd-smi`.
-11. **1249 MHz is the top memory step; idle is 96 MHz.** A ~3 ms wake-up after
-    idle disappears with `power_dpm_force_performance_level=high`. Never measure
-    one cold launch and call it the wall.
-12. **4 KB pages only.** `amdgpu` maps 4 KB PTEs; no HIP or ROCm API or env var
-    gives 2 MB pages. Huge-page theories are arithmetically excluded.
-13. **`v_dot4_i32_i8` cannot dual-issue**, and gfx11 has no `cp.async` (MUBUF has
-    no LDS bit). Two optimisation families are dead by design — check the ISA
-    before believing a rate table.
+1. **HIP 0 is the display card.** A load there caused a `ring gfx_0.0.0` timeout under
+   gnome-shell. Always `HIP_VISIBLE_DEVICES=1` for single-card work.
+2. **llama.cpp is excluded** — no baseline, no reference, no derived code, not installed. A
+   research subagent cloned and built it anyway and it had to be deleted. Name this rule in
+   every brief.
+3. **FP8 is excluded as a format** (ADR 0004). The 857 ms/token run is evidence for the
+   exclusion, never a baseline.
+4. **619 GB/s was never the wall** — a 1.6 ms kernel artefact. The wall is **776**.
+5. ~~**Below ~4 bits/weight the format is instruction-bound.**~~ **Refuted 2026-10-23** —
+   48.6 % occupancy, +23.7 % when memory is freed. See `H-1`. Do not re-derive this from
+   `DESIGN-instruction-budget.md` §1; that section is void.
+6. **Kernels must be checksum-gated.** An ungated probe reported 1784 GB/s — 230 % of the
+   wall — because the compiler hoisted the loads.
+7. **The ~800 MiB "footprint cliff" is probably the clock ramp.** Pin clocks before designing
+   around it.
+8. **`pkill -f <pattern>` matches your own ssh command line** and kills the shell running it.
+   Kill by PID.
+9. **Runtime Triton compiles stall the first requests** — 1–2 s per kernel. Warm-up is not
+   optional.
+10. **No `hf`, `git-lfs`, `uv`, `pipx` or `rocm-smi` on the host.** Downloads are HTTP +
+    `xargs -P4 curl`; clocks are `amd-smi`.
+11. **1249 MHz is the top memory step; idle is 96 MHz.** A ~3 ms wake-up after idle
+    disappears with `power_dpm_force_performance_level=high`. Never measure one cold launch.
+12. **4 KB pages only.** No HIP/ROCm API or env var gives 2 MB pages.
+13. **`v_dot4_i32_i8` cannot dual-issue**, and gfx11 has no `cp.async` (MUBUF has no LDS
+    bit). Two optimisation families are dead by design.
 14. **Dispatch must be type-sorted.** I-cache is 32 KB per WGP shared by both CUs;
     interleaving quant types in one CU costs −10 %, sorting costs 0.
-15. **A GGUF parse is right when arithmetic says so**: metadata + sum of tensor
-    bytes must equal the file size exactly. It closes to 0 B today.
-16. **`rocprofv3` reads no instruction counter on this host.** Twenty-one counters
-    were tested against a canary with a known instruction count (100 000 dependent
-    fadds): only `SQ_BUSY_CYCLES`, `SQ_WAVES` and `Wavefronts` are populated;
-    `SQ_INSTS_VALU`, `SQ_INST_CYCLES_VALU`, `VALUInsts`, `ValuPipeIssueUtil`,
-    `OccupancyPercent` and every `GL2C_*` read **0**. SQTT/ATT gives `"code": null`.
-    A zero from this profiler is not a measurement. `rocprofv3-avail pmc-check` is
-    not a tiebreaker — it fails on the iGPU agent for every counter. (2026-10-23)
-17. **The E1 harness needs `GRIDMUL=8`.** `grid = multiProcessorCount × GRIDMUL` =
-    42 × 8 = 336. A stray `GRIDMUL=4` runs at half grid and reports `full` = 436.5
-    instead of 516–523; that looked like an unstable baseline for one session.
-18. **A kernel shorter than ~3 ms cannot be measured on this card**, whatever the
-    footprint. The L2-resident experiment at `rp=4` (0.22 ms kernels) gave 690.3 and
-    366.7 GB/s on identical input. Use `rp=64` for a 38 MB footprint. (2026-10-23)
-19. **An unmeasured shape is not a target.** `RECORD.md` lists shapes with no number;
-    treating one of them as "the operating point" and optimising for it is the failure
-    `AGENTS.md` principle 1 names. It happened on 2026-10-23: a whole analysis was built
-    around `8 × 32 K`, a shape the owner had never named. The load-bearing variable is
-    resident tokens `B × C`; argue over the range, never at a point. (2026-10-23)
-20. **"The rest of the file runs at 752 GB/s" was an assumption, and it was 30–40 % too
-    high.** Measured: IQ4_XS 502.1 and Q4_K 452.2 against the IQ3_S 521. The whole-file
-    decode estimate fell from 56.0 to **47.1 tok/s** the moment two of the four types were
-    measured. Never let an unmeasured type contribute at a benchmark's rate. (2026-10-23)
-21. **IQ3_XXS's measured rows looked *fast* (581–592 GB/s) and were wrong.** Its kernel
-    failed the fp64 gate at 1.43 relative error and the checksum mismatched; the rate was
-    above IQ3_S's gated 516 — the wrong-but-fast signature. A plausible number from a
-    kernel that cannot reproduce the file is the most dangerous output this project
-    produces. (2026-10-23)
-22. **`aiter` is the HIP default and it is dead on gfx1100.** `get_platform().is_hip`
-    returns `"aiter"` for the attention backend, arch-blind, and aiter's CK/ASM kernels are
-    built for gfx942/gfx950: on this card they die at capture (`asserts on cpp_itfs`) and
-    its rope kernels want `ck_tile` types that do not build here. So a path can look
-    healthy and route into dead kernels. **Triton is the only backend that works on this
-    card; force it explicitly.** Never spend effort porting CK. Evidence:
-    `docs/research/14-sglang-gfx1100.md:19,42,44`, `03-native-kernel-inventory.md:72`.
-    (2026-10-23)
+15. **A GGUF parse is right when arithmetic says so**: metadata + Σ tensor bytes must equal
+    the file size exactly. It closes to 0 B.
+16. **`rocprofv3` reads no instruction counter on this host.** Twenty-one counters tested
+    against a canary with a countable instruction stream: only `SQ_BUSY_CYCLES`, `SQ_WAVES`,
+    `Wavefronts` populate. A zero from this profiler is not a measurement.
+17. **The E1 harness needs `GRIDMUL=8`** — `grid = 42 × GRIDMUL = 336`.
+18. **A kernel shorter than ~3 ms cannot be measured**, whatever the footprint. `rp=4` on 38 MB
+    gave 690.3 and 366.7 GB/s on identical input.
+19. **An unmeasured shape is not a target.** A whole analysis was built around `8 × 32 K`, a
+    shape the owner never named. The load-bearing variable is resident tokens `B × C`.
+20. **"The rest of the file runs at 752 GB/s" was an assumption and it was 30–40 % too high.**
+    Never let an unmeasured type contribute at a benchmark's rate.
+21. **IQ3_XXS's measured rows looked *fast* (581–592 GB/s) and were wrong** — fp64 error 1.43,
+    checksum mismatched. The wrong-but-fast signature is the most dangerous output here.
+22. **`aiter` is the HIP default and it is dead on gfx1100.** CK/ASM kernels are built for
+    gfx942/950; on this card they die at capture. **Triton is the only working backend; force
+    it explicitly.** Never port CK.
+23. **A probe's recommendation is not evidence.** `H-10` proposed adding `gguf_kernel.cu` to
+    `setup_rocm.py`; it cannot compile, because `__dp4a` is undeclared for gfx1100. Check a
+    recommendation's load-bearing fact before acting on it.
+24. **The host clone needs a git identity** — it was unset and commits failed with
+    `Author identity unknown`. Set `user.name`/`user.email` per clone.
 
 ## 7. Open — each waits on a named measurement
 
 | # | Question | Settled by |
 |---|---|---|
-| A1 | ~~**Is IQ3_S instruction-bound?**~~ | **CLOSED 2026-10-23 — no.** Occupancy 48.6 %, not ≥ 85 %; +23.7 % when memory is made free; the `n ≤ 1.04` target was a 32× unit error. Evidence: `H-1.md`, `H-2.md`. Replaced by A1b. |
-| **A1b** | **What costs the 521 → 645 GB/s gap?** Hypothesis: latency/MLP — 43 % of the body is `s_waitcnt`+`s_delay_alu`, and 21 global loads per 32 weights against `k_read`'s 5. | Ledger row **`H-3`**: a variant with wider outstanding loads per wave, accepting `full` ≥ 600 GB/s at 1.0700 GiB with the gate VALID. |
-| A2 | ~~In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S~~ | **CLOSED 2026-10-23 — measured.** Load floors 637–660 GB/s, all within 0.4–3.7 % of their own aligned-stream controls; **no layout penalises the read**. Dot rates: IQ4_XS **502.1**, Q4_K **452.2** (kernel-limited, 344 words/16 w). IQ3_XXS and IQ2_S **could not be gated** and keep only their floors. Whole-file 56.0 → **47.1 tok/s**. Evidence `H-4.md` |
-| A3 | ~~**Which drafter?**~~ | **ANSWERED 2026-10-23.** DFLASH is first-class in the vendored tree (Triton, explicit ROCm fallback, nothing CUDA-only by import). Draft cost at 521 GB/s: MTP-7 **7.445 GB = 65.6 % of a sweep**; DFlash2 BF16 40.2 %; DFlash2 4.5 bpw **15.8 %, flat in block size** → 139 / 164 / 199 tok/s. Licences: MIT code, Apache-2.0 weights. **Build MTP first, DFlash2 second, design the verify path for the block from day one.** Evidence `H-5.md` |
-| A4 | Topology: TP=2, DP=2, or pipeline | **Reopened 2026-10-23: the recorded "DP=2" priced only aggregate throughput.** Weights are *sharded*, not moved; what crosses is partial sums — 128 all-reduces × ~10 KiB = **1.3 MB, 52 µs of link bytes per token**, so the cost is `128 × round-trip latency`. At the recorded 20.65 µs, TP=2 is **1.48× on a single stream** (15.1 → 10.2 ms/token) and 1.93× at 2 µs, and sharded weights free VRAM (at a 7 GiB KV pool: ~6.5 concurrent 32K sessions, ~6.0 with the MTP head — `H-5.md`). DP=2 is **1.00× single-stream**, 2× only at concurrency ≥ 2. **Gate: mapped-memory round-trip latency** — that one number decides it |
-| A5 | The ~800 MiB anomaly's true cause | The clock-pinned re-run (trap 7) |
+| **A1b** | **What costs the 521 → 645 GB/s gap?** Hypothesis: latency/MLP — 43 % of the body is `s_waitcnt`+`s_delay_alu`, 21 global loads per 32 weights against `k_read`'s 5 | `H-3`: a variant with wider outstanding loads per wave, accepting `full` ≥ 600 GB/s at 1.0700 GiB, gate VALID |
+| A4 | Topology: TP=2, DP=2, or pipeline | `H-6`: the two-card round trip. TP=2 is **1.48× single-stream** at 20.65 µs, 1.93× at 2 µs; DP=2 is **1.00×** single-stream. Beat RCCL's 19.5 µs floor or report that you cannot |
+| A5 | The ~800 MiB anomaly's true cause | Clock-pinned re-run |
 | A6 | Does runtime adaptation earn its complexity | An ablation build per mechanism |
-| A7 | **What defines the i-quant grids, and is our inventory the publisher's recipe?** | The card says the files are **standard GGUF** ("run unmodified in llama.cpp"), so the grids are the standard tables; source them from `IST-DASLab/GSQ` (Apache-2.0), never llama.cpp. Diff our 72 `(role, type)` pairs against the publisher's `rco-allocation.txt` |
-| A8 | **What does the attention path cost?** 16 full-attention layers over paged KV — no kernel, no rate, and it is the leading term above the resident-token boundary | A paged decode-attention kernel over a context ladder, batch 1+, q8 and k8v4, checksum-gated. `COST-LEDGER.md` queue item 2 |
+| A7 | **What defines the i-quant grids, and is our inventory the publisher's recipe?** | Grids from `IST-DASLab/GSQ` (Apache-2.0, never llama.cpp); diff our 72 `(role, type)` pairs against the publisher's `rco-allocation.txt`. **84 % of the file's bytes depend on this** |
+| A8 | **What does the attention path cost?** 16 full-attention layers over paged KV — no kernel, no rate | A paged decode-attention kernel over a context ladder, batch 1+, q8 and k8v4, checksum-gated |
+| **A9** | **Can the engine serve this file on this card?** (bring-up) | `H-11`: the four blockers removed, a Triton MMVQ for IQ3_S, and a coherent 32-token generation — then TTFT and decode tok/s |
 
----
+## 8. The next unit of work
 
-## 8. The research prompt to run next
+**Engine bring-up.** Not another measurement, not the SPEC. The sequence, in order, with the
+blocker each step removes:
 
-Copy this verbatim into a fresh session. It is the frontier as of the corrected
-two-bound model, and it is shape-agnostic on purpose: no session count and no context
-length has been chosen.
+1. **Review or discard `engine/bringup`** (`79157797`, `bb39bf0f`) — both unrun. Decide whether
+   the aiter removal and the honest GGUF gate are the right shape before building on them.
+2. **Make `model_config` importable** — the aiter module-scope import is blocker 1; the branch
+   has a candidate fix, unverified.
+3. **Force Triton** for attention. The HIP default is aiter and it is dead here; a path that
+   runs can still route into CK kernels. Find where the default is chosen
+   (`arg_groups/model_override_base.py` ~`:326-327` per `14-sglang-gfx1100.md:19`).
+4. **Decide the GGUF kernel question honestly.** The engine needs `ggml_mul_mat_vec_a8` for
+   13 types; the ROCm wheel has none of them; the C++ source cannot compile (`__dp4a`
+   undeclared) and the C++ route is closed anyway. So: **a Triton MMVQ**, IQ3_S first,
+   correctness-gated against the file. Then the other types in `RECORD.md` order.
+5. **Then, and only then, take the baseline**: TTFT, decode tok/s, VRAM, and the shape printed
+   with it. That number is the "before" for everything else.
+
+Open question recorded rather than resolved: `REQUIREMENTS.md` S4 says every device-touching
+hot path is native, and a Triton IQ3_S GEMV has never been measured against the 521 GB/s asm
+kernel. "Bring up on Triton, replace the hot kernel natively later" is the reconciling
+reading — confirm with the owner before it hardens into plan.
 
 ```
-Build the cost ledger for this engine, then measure the terms it ranks. Every
-term cites either a measurement on this card or an assumption labelled with its
-error bar. Do not optimise anything until the ledger exists, and do not pick a
-shape: the owner has named no session count and no context length.
+Prompt for the next session, verbatim:
 
-1. LEDGER. Every byte on the critical path of one decode step, as a function of
-   B (concurrent sequences) and C (context length): weight read (10.57 GiB, once
-   per step, so 1/B per token), KV read (C x KV/position; 64 KiB bf16, 34 KiB
-   q8, over the 16 full-attention layers only), GDN recurrent state (159 MB per
-   sequence, read and written per token), drafter read (MTP head ~0.348 GB per
-   pass vs DFlash2 ~1.06 GB at 4.25 bpw, one pass per block), all-reduce or
-   handoff at 128x or 64x the measured round trip, launch overhead at 2-4 layer
-   fusion. Report each term as a share of the step across the plane, and the two
-   boundaries: B*C ~ 173K resident tokens where KV overtakes the weights, and
-   B ~ 36 where the GDN state does. State every input's provenance.
+Read HANDOFF.md, then AGENTS.md. Get the vendored sglang to serve
+Qwen3.8-27B-GSQ-RCO-IQ3_S.gguf on the headless card (PCI 07:00.0) and take the
+engine baseline: TTFT and decode tok/s, with the shape printed.
 
-2. THE VERIFY CURVE. Measure step time at every verification width k = 1..8 on
-   the real dequant-GEMV, one card. ms(k) is not linear, so this curve - not a
-   model - decides draft depth. Report ms(k) and the marginal cost of the k-th
-   token.
+Four blockers are already measured, in order: model_config will not import
+because aiter is imported at module scope under _is_hip; ModelConfig refuses GGUF
+on ROCm at configs/model_config.py:2128-2133; gguf.py has no HIP import branch so
+the five ggml_* names are undefined; and the ROCm sgl_kernel wheel has none of the
+ggml ops (0 of 47).
 
-3. THE ATTENTION PATH. No kernel exists, and it leads above the resident-token
-   boundary. Measure a paged decode-attention kernel at 4K/16K/64K/256K, batch 1
-   and 8, q8 and k8v4 (K 8-bit, V 4-bit), checksum-gated against a CPU
-   reference. Report GB/s, % of wall and ms/step.
+aiter is excluded on this card - do not port CK. Triton is the only working
+backend. The C++ gguf kernel cannot compile (__dp4a is undeclared for gfx1100) and
+that route is closed.
 
-4. THE ROUND TRIP. Beat RCCL's ~19.5 us floor or report that you cannot:
-   mapped-publish flag, p99 over >=1000 iterations, single-card loopback as the
-   floor. Price TP=2 (128 all-reduces) and PP=2 (64 layer handoffs) at the
-   measured number, at B=1 and B=8.
+engine/bringup holds two UNRUN commits from an interrupted probe: review or
+discard them before building on them. main is clean at 35939842.
 
-5. PREFILL. Price a 4K prompt: 2 x 26.9e9 params x 4096 FLOPs against measured
-   achievable FLOPS on one and on two cards. Report TTFT. If it exceeds 1 s it
-   is a first-class problem that S1 currently defers.
-
-6. ARBITER. Nothing enters RECORD.md until the publisher's GSQ reference
-   reproduces one dequantised block bit-for-bit, and a second kernel path with a
-   different instruction mix lands within 5% of the first.
-
-Constraints: llama.cpp excluded; no weights across PCIe; gfx1100-native; VRAM is
-the budget; records never targets; no shape is the target.
+Deliverable: a coherent 32-token greedy generation and its tok/s, or the exact
+next blocker with file:line. Not a plan, not a measurement of a proxy. Every claim
+quoted from a command; no number enters RECORD.md ungated.
 ```
 
 ## 9. Research assets, and what each is for
 
 | Path | Use it for |
 |---|---|
-| `docs/research/2026-10-23/s3-amd-sinks.md` | the ISA survey: VOPD limits, I-cache, page size, memory hints, queue behaviour — 42 sourced URLs. Read it for the **ISA facts**, not for an issue model |
-| `docs/research/2026-10-23/s4-topologies.md` | every two-card strategy priced per token: DP=2 = PP=2 = 2×, TP=2 = 1.47× — **read with `A4`'s correction in mind**: it prices aggregate throughput, not single-stream |
-| `docs/research/2026-10-23/s5-donor-transfer.md` | **what to import from the donors and what is dead here**: the verify-width cost curve (tensorfold), layer split as the two-card default (strata), k8v4 KV, and the per-row applicability gate |
-| `docs/plan/COST-LEDGER.md` | the shape surface: every per-token term as a function of `(B, C)`, the two boundaries, provenance, and the ranked measurement queue |
-| `docs/research/2026-10-23/s2-tensorfold-freetoken.md` | TensorFold's measured MTP depth rule; why the codebooks are not the cost; the LUT-instead-of-SWAR observation |
-| `docs/research/2026-10-23/s1-strata.md` | the GPU-publish/pre-launched-acquire handoff (~200 lines) and the measured **690:1 latency-to-bytes** ratio for a host-mediated boundary |
-| `docs/research/2026-10-22/` | round one: languages, megakernels, bandwidth, KV, serving knobs, 2025–26 sweep, correctness. Absolute figures ~25 % low; relative findings stand |
-| `bench/gfx1100-probes/` | `WALL`, `E1` (IQ3_S ablations, checksum-gated), `E2` (launch/fusion), and the sources `bw2.cpp`, `gemv.cpp`, `iq3s_valid.cpp`, `e2_launch.cpp` |
+| `docs/plan/COST-LEDGER.md` | the shape surface: every per-token term as a function of `(B, C)`, the two boundaries, provenance, the ranked queue, and what the verify curve changed |
+| `docs/research/2026-10-23/s5-donor-transfer.md` | what to import from the donors and what is dead here: TensorFold's verify-width cost curve, strata's layer split + `k8v4`, and the per-row applicability gate |
+| `docs/research/2026-10-23/s3-amd-sinks.md` | the ISA survey — 42 sourced URLs. **ISA facts only; the issue model is refuted** |
+| `docs/research/2026-10-23/s4-topologies.md` | every two-card strategy priced per token — but it prices *aggregate* throughput, not single-stream |
+| `docs/research/2026-10-23/s1-strata.md` | the GPU-publish/pre-launched-acquire handoff and the **690:1 latency-to-bytes** ratio for a host-mediated boundary |
+| `docs/research/2026-10-22/04-kv-cache.md` | the resident-token crossover (173K bf16), q8_0's 34 KiB/position, and the capacity arithmetic |
+| `docs/research/18-tp-roccl.md` | the measured RCCL all-reduce table on this box; the ~19.5 µs floor |
+| `docs/research/14-sglang-gfx1100.md` | the engine's HIP defaults: aiter everywhere, flashinfer excluded by construction, the trap |
+| `bench/gfx1100-probes/` | `WALL`, `E1` (IQ3_S ablations, gated), `E2` (launch/fusion), and the sources including `iq3s_valid.cpp` — **the kernel the engine needs** |
 | `bench/manifests/` | `iq3s.json`, `iq3s-mtp.json` — every tensor, role, type, dimension |
-| `docs/plan/TENSOR-INVENTORY.md` | the inventory: 72 `(role, type)` pairs, byte budget, GDN-only roles |
-| `https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` | quality anchors: IQ3_S matches BF16 on AIME25 and LCB v6 |
-| `https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2` | the DFlash2 drafter card: 2B BF16 block-diffusion, acceptance vs MTP (5.46 vs 5.02 GSM8K), throughput vs MTP (3.43× vs 2.59× at concurrency 1). Published on an **H200 with FA3** — the acceptance may transfer, the kernel stack will not |
-| `https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` | **the publisher's own card**, which says the files are *standard GGUF* ("run unmodified in llama.cpp, Ollama, LM Studio"). GSQ = Gumbel-Softmax Quantization (learns grid assignments + group scales); RCO = Riemannian Constrained Optimization (picks the type per tensor under a size budget). Apache-2.0 |
-| `tensor-allocation/Qwen3.8-27B-GSQ-RCO-IQ3_S.rco-allocation.txt` (same HF repo) | **the publisher's per-tensor recipe** — the ground truth our 72 `(role, type)` pairs must match. Diff it against `bench/manifests/iq3s.json` (A7) |
-| `https://github.com/IST-DASLab/GSQ` (Apache-2.0) | the legitimate source for the i-quant **grid tables** — it must implement the GGUF grids to quantise into them. E1 used a placeholder; 84 % of the file's bytes depend on the real ones. Never llama.cpp (`H3`) |
+| `docs/agents/production/hypothesis-ledger.md` | H-1 … H-11 with verdicts, tests, and provenance |
+| `https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` | the publisher's card: **standard GGUF**, the Gumbel-Softmax/RCO method, Apache-2.0 |
+| `…/tree/main/tensor-allocation` | the publisher's per-tensor recipe — the ground truth for our 72 pairs (`A7`) |
+| `https://github.com/IST-DASLab/GSQ` | the grid tables, Apache-2.0 — never llama.cpp |
+| `https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2` | the drafter: 2B BF16 block-diffusion, MIT code / Apache-2.0 weights, published on an H200 with FA3 |
 
 ## 10. Skills for the next session, in order
 
-1. `fullstack-software-development` → `references/discovery.md` and
-   `references/orchestrator.md` (PLAN/Discovery is the open stage; v10 has no
-   separate `plan-guide.md`).
-2. `get-deeper` before any design document. The unit check that killed the `n`
-   model — and the differential experiment that replaced it — both came from
-   exactly that move.
+1. `fullstack-software-development` → `references/discovery.md` and `references/orchestrator.md`
+   (Discovery is the open stage; v10 has no `plan-guide.md`).
+2. `get-deeper` before any design document. The unit check that killed the `n` model and the
+   differential experiment that replaced it both came from that move.
 3. `mattpocock-research` for any lane reading primary sources.
-4. `adversarial-judge-stress` for the plan gate, dispatched fresh.
-5. `mattpocock-handoff` for the next handoff.
+4. `mattpocock-diagnosing-bugs` for the engine bring-up — it is a diagnosis, not a build.
+5. `adversarial-judge-stress` for the plan gate, dispatched fresh, only when the ledger closes.
+6. `mattpocock-handoff` for the next handoff.
 
-## 11. One caution about workers
+## 11. On workers, and on drift
 
-Four independent subagents in a prior session produced confident output that was
-wrong or in breach: one built llama.cpp, one reported 230 % of the wall, one
-reintroduced a rule that had been disproven, one recorded an open question as
-settled. Each was caught by an independent check — a rebuild, a checksum, a
-re-read. **Budget verification time, and never accept a subagent's number into
-the record without reproducing it.**
+Subagents have produced real results in this project — the ISA census, the per-type sweep,
+the drafter survey, the deletion map — and they have also cost it. The incidents, all caught
+by an independent check: one built llama.cpp; one reported 230 % of the wall; one reintroduced
+a disproven rule; one recorded an open question as settled; one wrote its own disassembler and
+re-derived a census another probe already had, instead of stopping when its named counter read
+zero; one reported a 436 GB/s baseline that was an inherited `GRIDMUL=4`; one recommended a
+build step that cannot compile.
 
-Two more on 2026-10-23, both in this section's spirit:
+**The owner's verdict at the end of 2026-10-23, and it should be respected:** delegation made
+the session *drift* — too much work on proxies, too little on the engine. The rule that follows:
 
-- A probe wrote its own disassembler and re-derived a census another probe was
-  already producing, instead of stopping when its named counter read zero. The
-  stop-and-report rule in the brief is the thing that was missing; it is now in
-  every brief.
-- A probe reported `full` = 436.5 GB/s and called the baseline unstable. It had
-  inherited a stray `GRIDMUL=4`. **Check the harness's printed config line against
-  the published one before believing any % of wall.**
-
-The instrument failure (trap 16) was found by asking for a *known quantity* —
-a canary with a countable instruction stream — not by reading a report.
+- **Prefer doing the work directly.** Delegate a lane only when it is genuinely parallel and
+  the premise is already checked.
+- **Never dispatch a brief whose load-bearing premise you have not verified against the repo's
+  own research.** Two briefs in one session carried premises the docs already contradicted
+  (aiter as a missing dependency; the C++ kernel as portable by wiring).
+- **Every subagent number needs an independent reproduction before it enters the record** —
+  and the reproduction is cheap: one command, one grep, one file count.
+- The user reviews decisions, never code. That makes the *evidence* the product of the
+  session; a report whose claims cannot be re-checked in one command is not evidence.
