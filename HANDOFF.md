@@ -98,6 +98,7 @@ a leftover process — check `etime` before killing, and kill by PID.
 | E1 harness | `~/e1/iq3s_valid <manifest> <gguf> <NV> <rp>`, **`GRIDMUL=8 BLK=256` → `grid=336×256`**; `GRIDMUL=4` silently halves the grid and reports 436 GB/s |
 | Manifest | `python3 ~/e1/mkmanifest.py <gguf> 30 <out>`; a 1-tensor manifest must be cut by hand (`awk 'NR==2'`) — the generator asserts ≥1 GiB and an empty manifest segfaults the harness |
 | Profiler | `rocprofv3` **1.4.1** at `/opt/rocm/bin`. Reads only `SQ_BUSY_CYCLES`, `SQ_WAVES`, `Wavefronts`; every instruction and `GL2C_*` counter is 0. See trap 16 |
+| Memory terms | **VRAM** = the card's GDDR6, 19.98 GiB, where the 776 GB/s wall is measured. **L2** = 96 MB on-die. **Host RAM** never appears in a timed path — no spill, no managed allocation. A "DRAM arm" in an older report means VRAM, not system memory |
 
 ## 6. Standing traps
 
@@ -159,7 +160,7 @@ Each has an incident behind it. Do not treat any as folklore.
 | A1 | ~~**Is IQ3_S instruction-bound?**~~ | **CLOSED 2026-10-23 — no.** Occupancy 48.6 %, not ≥ 85 %; +23.7 % when memory is made free; the `n ≤ 1.04` target was a 32× unit error. Evidence: `H-1.md`, `H-2.md`. Replaced by A1b. |
 | **A1b** | **What costs the 521 → 645 GB/s gap?** Hypothesis: latency/MLP — 43 % of the body is `s_waitcnt`+`s_delay_alu`, and 21 global loads per 32 weights against `k_read`'s 5. | Ledger row **`H-3`**: a variant with wider outstanding loads per wave, accepting `full` ≥ 600 GB/s at 1.0700 GiB with the gate VALID. |
 | A2 | In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S | Per-type sweep on the E1 harness — each type has its own instruction count and therefore its own two-bound corner |
-| A3 | MTP acceptance on this box | Teacher-forced replay against the shipped MTP head; the highest-value measurement now, because speculation divides per-token work by the acceptance length and pays off whichever resource binds |
+| A3 | **Which drafter?** Acceptance and per-step cost for the shipped MTP head vs the **DFlash2** block-diffusion drafter (`z-lab/Qwen3.8-27B-DFlash2`) | Teacher-forced replay for MTP; the same plus the drafter's own pass cost for DFlash2. Per-step = target sweep + draft cost. The head is only ~0.35 GB; DFlash2 is ~4 GB BF16 or ~1.1 GB at 4.5 bpw, which decides the KV budget |
 | A4 | Topology | **Answered for IQ3_S: DP=2.** PP=2 if a larger quant is used; TP needs a sub-6 µs all-reduce. Remaining gate: mapped-memory round-trip latency |
 | A5 | The ~800 MiB anomaly's true cause | The clock-pinned re-run (trap 7) |
 | A6 | Does runtime adaptation earn its complexity | An ablation build per mechanism |
@@ -191,7 +192,7 @@ and committed.
 3. SIGN PATH. (a) current branch-free SWAR; (b) signs folded into a 512-entry LUT
    at load; (c) scale amortised over 256 weights. Report GB/s AND instruction
    words per 32 weights per variant. Measured fact to respect: deleting the sign
-   path is worth +13.8% at DRAM but only +7.3% with memory free, so judge every
+   path is worth +13.8% in VRAM but only +7.3% with memory free, so judge every
    variant at 1.0700 GiB, never in cache.
 
 4. PRICE SPECULATION. Teacher-forced replay against the shipped MTP head to get
@@ -228,6 +229,7 @@ coalescing: read is already at 96% of the wall.
 | `bench/manifests/` | `iq3s.json`, `iq3s-mtp.json` — every tensor, role, type, dimension |
 | `docs/plan/TENSOR-INVENTORY.md` | the inventory: 72 `(role, type)` pairs, byte budget, GDN-only roles |
 | `https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` | quality anchors: IQ3_S matches BF16 on AIME25 and LCB v6 |
+| `https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2` | the DFlash2 drafter card: 2B BF16 block-diffusion, acceptance vs MTP (5.46 vs 5.02 GSM8K), throughput vs MTP (3.43× vs 2.59× at concurrency 1). Published on an **H200 with FA3** — the acceptance may transfer, the kernel stack will not |
 
 ## 10. Skills for the next session, in order
 

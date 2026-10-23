@@ -15,12 +15,12 @@ Evidence: [`../agents/production/run-artifacts/hypotheses/H-1.md`](../agents/pro
 
 | configuration | GB/s | % of the 776 wall |
 |---|---:|---:|
-| as published, 1.0700 GiB, DRAM | **521** | 67 % |
+| as published, 1.0700 GiB, VRAM | **521** | 67 % |
 | **same kernel, 38.3 MB, L2-resident** | **645** | **83 %** |
 | the read wall | 776 | 100 % |
 
 The second row is the important one. It is the same binary, the same instruction stream and
-the same checksum, with the weight stream served from the 96 MB L2 instead of DRAM — so it
+the same checksum, with the weight stream served from the 96 MB L2 instead of VRAM — so it
 measures what the kernel does when memory is free. `read` in that arm reaches 1.76 TB/s,
 which is how we know the footprint really was cache-resident.
 
@@ -67,7 +67,7 @@ delivered at 96 % of the wall. Not issue slots: 48.6 % used. The kernel is losin
 - **43 % of the body is wait machinery** — 19 `s_waitcnt` + 31 `s_delay_alu` in 193 words.
 - **21 global-memory instructions per 32 weights**, against `k_read`'s 5 — the dequant reads
   four odd-sized fields per block group instead of one contiguous 16 B unit.
-- **The sign path's cost depends on the arm**: removing it is worth **+13.8 %** at DRAM
+- **The sign path's cost depends on the arm**: removing it is worth **+13.8 %** in VRAM
   (521 → 593) but only **+7.3 %** with memory free (645 → 692), although it deletes 25 % of
   the instruction words. A pure issue cost would help by the same fraction in both arms; the
   difference is the signature of an instruction–latency interaction — it costs more when

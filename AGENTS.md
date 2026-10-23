@@ -29,6 +29,75 @@ Read before writing anything: `HANDOFF.md`,
    GitHub issues, coder subagents, gated promotion. See
    `docs/agents/control-plane.md`.
 
+## Principles
+
+The hard rules above are constraints. These are the direction of travel: they decide what
+a *good* change looks like when nothing forbids it. Each is traceable to a record.
+
+**1. Records, never targets.** No number is a goal. A fixed tok/s or GB/s target is a false
+objective — it licenses leaving performance on the table the moment the number is met. The
+objective is **bandwidth efficiency**: achieved GB/s against the measured 776 GB/s wall,
+per shape. The discipline is to break the standing record every time and explain the shape.
+`docs/plan/RECORD.md` is the ledger; `REQUIREMENTS.md` H6/H7 is the rule.
+
+**2. gfx1100-native, one machine.** Every hot path is gfx1100 machine code reached through
+ROCm. No portability layer, no NVIDIA fallback kept "just in case", no abstraction that
+exists to serve another vendor or another card. A branch that exists for hardware we do not
+have is a defect, not insurance. (H5)
+
+**3. The engine is the minimum that runs this model on this box.** Vendored sglang is raw
+material, not a dependency to preserve: strip it to what the decode path and the gate path
+actually touch, delete rather than configure, and make every retained file earn its place.
+Small and fast beats complete. (H9)
+
+**4. Speculation is core, not an optimisation.** Decode pays one weight sweep per
+*verification step*, so accepted tokens per step divide the per-token cost. Both drafters are
+in scope — the shipped MTP head and the DFlash2 block-diffusion drafter — and the drafter's
+own weight read is part of the per-step budget, never free. (H2)
+
+**5. VRAM is the budget.** The model, the drafter and every KV cache share 19.98 GiB per
+card. Any addition names what it displaces, in GB and in concurrent 32K sessions. Spilling to
+host memory is not a slow path, it is a design failure. (H1)
+
+**6. Measure, then believe.** A number without its baseline in the same artifact is an
+opinion. When a document and a measurement disagree, the measurement wins and the document is
+corrected that turn. (H10)
+
+**7. Gate every probe on a checksum.** A fast wrong kernel is worse than a slow right one: an
+ungated probe once reported 230 % of the wall because the compiler hoisted its loads. No row
+enters a report without a data-dependent checksum replayed on the host.
+
+**8. Validate the instrument before trusting the reading.** Ask the instrument for a known
+quantity first — a canary with a countable answer. A zero from a profiler is a broken counter
+until proven otherwise; on this host `rocprofv3` reads no instruction counter at all.
+
+**9. Reproduce before recording.** Nothing enters `RECORD.md` or the hypothesis ledger without
+an independent reproduction, including anything a subagent reports. Cite the row; never
+re-derive a number from prose.
+
+**10. Correctness is designed, not assumed.** Where a format or kernel claims losslessness,
+greedy output matches the reference exactly; where it does not, the bounded error is stated
+with its tolerance *before* the run. A 32-token match is an arbiter, not the method. (H11)
+
+## Two cards, one machine
+
+Two RX 7900 XT at 19.98 GiB each: **39.96 GiB of VRAM and 2× the compute**, joined by
+PCIe 4.0 ×16 with **no peer-to-peer DMA**. That asymmetry is a design problem, not a
+limitation to accept:
+
+- **Bandwidth is per card, not pooled.** 776 GB/s each, 1552 GB/s aggregate — but only when
+  the cards do *independent* work. Two cards cooperating on one token double nothing.
+- **The link is ~25–30 GB/s and host-mediated.** Never move weights across it per token. A
+  10 KiB handoff per token is affordable; a 10 GiB one is not. The measured ratio for a
+  host-mediated boundary is **690:1 latency-to-bytes** — price handoffs in round-trips,
+  never in bytes.
+- **Replicate before you shard.** For this quant, DP=2 (a full replica per card) costs zero
+  link traffic and takes 2× aggregate throughput; TP=2 spends 128 all-reduces per step
+  (~2.64 ms, 27 % of it) to buy 1.47×; pipeline equals replication at ≥2 concurrent
+  requests. **DP=2 for IQ3_S; PP=2 only if a larger quant is ever used.**
+- **Each replica carries its own model and its own drafter**, so *per-card* VRAM — not the
+  aggregate — sets the KV budget and therefore the number of concurrent 32K sessions.
+
 ## Sync topology
 
 The Mac clone is the writing surface. It pushes to `origin`, the bare repo
