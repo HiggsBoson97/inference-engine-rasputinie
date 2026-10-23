@@ -60,8 +60,14 @@ has to re-derive it.
 
 ## Ranked measurement queue (shape-independent)
 
+**Measure in the engine, not in scratch harnesses.** A rate from a hand-cut manifest of 30
+concatenated tensors is a proxy: it does not exercise the layer sequence, the dispatch, the
+GDN recurrence, the KV path or the second card. Scratch harnesses are for questions the engine
+cannot yet answer; once the engine runs, every term below is measured in situ.
+
 | # | measurement | why it ranks here |
 |---|---|---|
+| **0** | **the engine baseline** — does the vendored sglang serve this GGUF on this card, which dequant path does it take on ROCm, and at what tok/s | every later number is measured against it, and the only engine figure on record (857 ms/token) is a different checkpoint in an excluded format. `H-10` |
 | 1 | verify-width cost curve `ms(k)`, k = 1…8 | speculation's value is `acceptance(k)/step_ms(k)`; `step_ms(k)` is not linear, so `k` cannot be chosen without it. TensorFold measures exactly this curve (`cuda_cost_adapter.zig`) |
 | 2 | the attention path: paged decode-attention rate at q8 and k8v4, several contexts | the largest unmeasured term; decides whether boundary 1 becomes reachable in practice |
 | 3 | two-card round trip, p99 over 1000 iterations, with RCCL's 19.5 µs floor as the baseline to beat | decides TP vs PP vs DP; a custom mapped-flag protocol may beat RCCL's floor |

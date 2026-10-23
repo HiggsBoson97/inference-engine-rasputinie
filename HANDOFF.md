@@ -55,6 +55,19 @@ The frame for what comes next is `docs/plan/COST-LEDGER.md`: rank measurements b
 they address, over the shape surface, never at a point. Its queue puts the **verify-width
 cost curve** first, then the **attention path**, then the round trip, then prefill.
 
+**Strategy shift, 2026-10-23 (owner direction): measure in the engine, not in scratch
+harnesses.** Every rate on record so far came from `~/e1`, `~/a2`, `~/a9` — hand-cut manifests
+of 30 concatenated tensors, which exercise none of the layer sequence, dispatch, GDN
+recurrence, KV path or second card. That is a proxy, and the work now moves into `engine/`:
+strip it to what this model and this card need, then optimise in situ. `H-10` is the baseline
+(does the vendored sglang serve this GGUF on ROCm, which dequant path, at what tok/s) plus the
+deletion map. Scratch harnesses remain valid only for questions the engine cannot yet answer.
+
+The decisive engine fact already known: `engine/python/sglang/srt/layers/quantization/gguf.py`
+declares all 13 of our weight types, but the fast path is a CUDA-only MMQ kernel and the
+fallback is `dequantize → bf16 matmul` — a different algorithm from our measured 521 GB/s
+fused `dp4a` GEMV.
+
 ## 3. Read order
 
 1. [`docs/plan/COST-LEDGER.md`](docs/plan/COST-LEDGER.md) — **the frame**: every per-token
