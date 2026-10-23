@@ -102,8 +102,11 @@ one card that is double in everything.
   15.1 ms/token sweep into 10.2 ms (**1.48×**); at a 2 µs round trip, 7.8 ms (**1.93×** —
   essentially perfect doubling). DP=2 gives **1.00× on a single stream**: one card does the
   work and the other idles. It reaches 2.00× only at concurrency ≥ 2.
-- **TP also buys KV capacity.** Sharded weights are 5.89 GB per card instead of 11.77, and KV
-  shards by head, so the pair holds ~13 concurrent 32K sessions against DP's ~7.5.
+- **TP also buys KV capacity.** Sharded weights are ~5.5 GiB per card instead of 11.8, and the
+  KV shards by head, so the pair's KV pool is `VRAM − trunk/2 − drafter` per card. At a 7 GiB
+  pool that is ~6.5 concurrent 32K sessions with no drafter, ~6.0 with the MTP head, ~5.9 with
+  DFlash2 at 4.5 bpw, and ~4.8 with DFlash2 at BF16 — the drafter's precision costs sessions,
+  which is why it must be quantised (`run-artifacts/hypotheses/H-5.md`).
 - **The lever is round-trip latency.** Every microsecond off it is ~0.13 ms off the step,
   because there are 128 of them. 20.65 µs is a host-mediated path; GPU-publish /
   pre-launched-acquire is the documented alternative and is the thing to measure.

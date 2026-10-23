@@ -15,7 +15,7 @@ everywhere else. That is the failure this document exists to prevent.
 | **weight read** | `10.57 GiB / B` | 1/B — read once per step, used by every sequence | measured (`H-1`: 521–645 GB/s, 10.57 GiB/file) |
 | **KV read** | `C × KV/position` | C, independent of B | derived from geometry: 16 full-attention layers × 4 KV heads × 256 dim × K,V. **64 KiB/position at bf16, 34 KiB at q8_0** (the f16 block scale costs 2 KiB) — `docs/research/2026-10-22/04-kv-cache.md` |
 | **GDN recurrent state** | `0.318 GB` | independent of B and C; per sequence, so it multiplies by B per step | derived: 159 MB per sequence, FP32, read+write per token — `REQUIREMENTS.md` R5, `00-facts.md` |
-| **drafter** | `draft bytes / B` | 1/B | MTP head ≈ 0.348 GB × passes (autoregressive, one pass per draft token); DFlash2 ≈ 1.06 GB at 4.25 bpw, one pass per block |
+| **drafter** | MTP: **1.064 GB per draft token** (0.325 GiB Q6_K layer + 0.666 GiB LM-head re-read) — 7.445 GB for 7 tokens, **65.6 % of a sweep**. DFlash2: **0.257 GB per token**, flat in block size (one forward per block) — 1.798 GB at 4.5 bpw, **15.8 % of a sweep** | per step, so MTP scales with draft depth and DFlash2 does not | measured as a cost model in `run-artifacts/hypotheses/H-5.md`; the earlier "MTP ≈ 0.348 GB per pass" was wrong by 3× because the head re-reads the LM head |
 | **all-reduce / handoff** | `128 × RTT` (TP) or `64 × RTT` (PP) | per step, independent of B | RCCL floor measured at **~19.5 µs**, 20.65 µs amortised at 10 KiB, not tunable by NCCL env (`docs/research/18-tp-roccl.md`) |
 | **launch overhead** | 17–33 launches × 5–30 µs | per step | measured, E2 |
 

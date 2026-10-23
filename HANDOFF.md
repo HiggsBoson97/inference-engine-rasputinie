@@ -35,10 +35,21 @@ surface is the failure `AGENTS.md` principle 1 names.
 
 ## 2. Phase
 
-**PLAN.** A1 is answered (refuted). The ledger has four open rows: `H-3` (latency/MLP),
-`H-4` (per-type rates, **running**), `H-5` (drafter selection, **running**), `H-6` (two-card
-round trip, brief written, queued behind the GPU) and `H-7` (grids + recipe, not started).
-The plan gate has not passed and nothing is built.
+**PLAN.** A1, A2 and A3 are answered. Open rows: `H-3` (latency/MLP), `H-6` (two-card round
+trip, brief written, GPU now free), `H-7` (grids + recipe), `H-8` (attention path). The plan
+gate has not passed and nothing is built.
+
+Two measurements landed on 2026-10-23 and both cut numbers that were recorded:
+
+- **A2/H-4:** the 752 GB/s assumption for the non-IQ3_S bytes is **30–40 % too high** where it
+  was measured. Whole-file decode re-derives from 56.0 to **47.1 tok/s** (a 19 %
+  overstatement), and is still an upper bound over 24.5 % of the bytes that could not be
+  gated. Load floors are all 82–85 % of wall; no layout penalises the read.
+- **A3/H-5:** the MTP head costs **65.6 % of a weight sweep** for 7 draft tokens — 1.064 GB
+  per token, because it re-reads the LM head each pass. DFlash2 costs 15.8 % at 4.5 bpw and is
+  **flat in block size**. DFLASH is already first-class in the vendored tree, Triton, with an
+  explicit ROCm fallback. Recommendation: MTP first, DFlash2 second, but build the verify path
+  for the block from day one.
 
 The frame for what comes next is `docs/plan/COST-LEDGER.md`: rank measurements by the term
 they address, over the shape surface, never at a point. Its queue puts the **verify-width
@@ -175,6 +186,15 @@ Each has an incident behind it. Do not treat any as folklore.
     `AGENTS.md` principle 1 names. It happened on 2026-10-23: a whole analysis was built
     around `8 × 32 K`, a shape the owner had never named. The load-bearing variable is
     resident tokens `B × C`; argue over the range, never at a point. (2026-10-23)
+20. **"The rest of the file runs at 752 GB/s" was an assumption, and it was 30–40 % too
+    high.** Measured: IQ4_XS 502.1 and Q4_K 452.2 against the IQ3_S 521. The whole-file
+    decode estimate fell from 56.0 to **47.1 tok/s** the moment two of the four types were
+    measured. Never let an unmeasured type contribute at a benchmark's rate. (2026-10-23)
+21. **IQ3_XXS's measured rows looked *fast* (581–592 GB/s) and were wrong.** Its kernel
+    failed the fp64 gate at 1.43 relative error and the checksum mismatched; the rate was
+    above IQ3_S's gated 516 — the wrong-but-fast signature. A plausible number from a
+    kernel that cannot reproduce the file is the most dangerous output this project
+    produces. (2026-10-23)
 
 ## 7. Open — each waits on a named measurement
 
@@ -182,9 +202,9 @@ Each has an incident behind it. Do not treat any as folklore.
 |---|---|---|
 | A1 | ~~**Is IQ3_S instruction-bound?**~~ | **CLOSED 2026-10-23 — no.** Occupancy 48.6 %, not ≥ 85 %; +23.7 % when memory is made free; the `n ≤ 1.04` target was a 32× unit error. Evidence: `H-1.md`, `H-2.md`. Replaced by A1b. |
 | **A1b** | **What costs the 521 → 645 GB/s gap?** Hypothesis: latency/MLP — 43 % of the body is `s_waitcnt`+`s_delay_alu`, and 21 global loads per 32 weights against `k_read`'s 5. | Ledger row **`H-3`**: a variant with wider outstanding loads per wave, accepting `full` ≥ 600 GB/s at 1.0700 GiB with the gate VALID. |
-| A2 | In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S | Per-type sweep on the E1 harness — each type has its own instruction count and therefore its own two-bound corner |
-| A3 | **Which drafter?** Acceptance and per-step cost for the shipped MTP head vs the **DFlash2** block-diffusion drafter (`z-lab/Qwen3.8-27B-DFlash2`) | Teacher-forced replay for MTP; the same plus the drafter's own pass cost for DFlash2. Per-step = target sweep + draft cost. The head is only ~0.35 GB; DFlash2 is ~4 GB BF16 or ~1.1 GB at 4.5 bpw, which decides the KV budget |
-| A4 | Topology: TP=2, DP=2, or pipeline | **Reopened 2026-10-23: the recorded "DP=2" priced only aggregate throughput.** Weights are *sharded*, not moved; what crosses is partial sums — 128 all-reduces × ~10 KiB = **1.3 MB, 52 µs of link bytes per token**, so the cost is `128 × round-trip latency`. At the recorded 20.65 µs, TP=2 is **1.48× on a single stream** (15.1 → 10.2 ms/token) and 1.93× at 2 µs, and sharded weights free VRAM (~13 concurrent 32K sessions vs DP's ~7.5). DP=2 is **1.00× single-stream**, 2× only at concurrency ≥ 2. **Gate: mapped-memory round-trip latency** — that one number decides it |
+| A2 | ~~In-situ rates for IQ4_XS, IQ3_XXS, Q4_K, IQ2_S~~ | **CLOSED 2026-10-23 — measured.** Load floors 637–660 GB/s, all within 0.4–3.7 % of their own aligned-stream controls; **no layout penalises the read**. Dot rates: IQ4_XS **502.1**, Q4_K **452.2** (kernel-limited, 344 words/16 w). IQ3_XXS and IQ2_S **could not be gated** and keep only their floors. Whole-file 56.0 → **47.1 tok/s**. Evidence `H-4.md` |
+| A3 | ~~**Which drafter?**~~ | **ANSWERED 2026-10-23.** DFLASH is first-class in the vendored tree (Triton, explicit ROCm fallback, nothing CUDA-only by import). Draft cost at 521 GB/s: MTP-7 **7.445 GB = 65.6 % of a sweep**; DFlash2 BF16 40.2 %; DFlash2 4.5 bpw **15.8 %, flat in block size** → 139 / 164 / 199 tok/s. Licences: MIT code, Apache-2.0 weights. **Build MTP first, DFlash2 second, design the verify path for the block from day one.** Evidence `H-5.md` |
+| A4 | Topology: TP=2, DP=2, or pipeline | **Reopened 2026-10-23: the recorded "DP=2" priced only aggregate throughput.** Weights are *sharded*, not moved; what crosses is partial sums — 128 all-reduces × ~10 KiB = **1.3 MB, 52 µs of link bytes per token**, so the cost is `128 × round-trip latency`. At the recorded 20.65 µs, TP=2 is **1.48× on a single stream** (15.1 → 10.2 ms/token) and 1.93× at 2 µs, and sharded weights free VRAM (at a 7 GiB KV pool: ~6.5 concurrent 32K sessions, ~6.0 with the MTP head — `H-5.md`). DP=2 is **1.00× single-stream**, 2× only at concurrency ≥ 2. **Gate: mapped-memory round-trip latency** — that one number decides it |
 | A5 | The ~800 MiB anomaly's true cause | The clock-pinned re-run (trap 7) |
 | A6 | Does runtime adaptation earn its complexity | An ablation build per mechanism |
 | A7 | **What defines the i-quant grids, and is our inventory the publisher's recipe?** | The card says the files are **standard GGUF** ("run unmodified in llama.cpp"), so the grids are the standard tables; source them from `IST-DASLab/GSQ` (Apache-2.0), never llama.cpp. Diff our 72 `(role, type)` pairs against the publisher's `rco-allocation.txt` |
