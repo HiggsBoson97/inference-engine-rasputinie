@@ -1,5 +1,11 @@
 # 04 — KV cache: memory, quantisation, and quality
 
+> **Correction, 2026-10-23.** This lane's tables use `8 × 32 K` as an *illustration*.
+> The owner has not chosen a session count or a context length, so that shape is not a
+> target and must not be optimised for. The load-bearing variable is **resident tokens
+> `B × C`**; the boundaries are derived in `docs/plan/COST-LEDGER.md`. The arithmetic
+> below is unchanged — only the framing of one line was too strong.
+
 **Question:** what are all the levers on KV memory and quality for Qwen3.8-27B on 40 GB, and which preserve quality for *this* architecture?
 
 **Short answer:** the KV cache on this model is a **capacity** lever, not a bandwidth lever, and the interesting lever is not the KV cache at all — it is the 159 MB recurrent state, whose second copy (the prefix-cache checkpoint) is quantisable at nearly zero risk. q8 KV is worth building, but it is worth building because it takes 32K sessions from **6.5 to 11.6 per card** and makes the native 256K context fit at all — not because it makes batch-1 decode faster, where it buys 8%.
@@ -60,7 +66,10 @@ Per card under TP=2 the KV read is **32 KiB per token of context**. The weight r
 Consequences, and they invert the intuitive ordering:
 
 1. **At batch 1 and 32K, q8 KV is worth 8%.** Do not build it as a speed optimisation. The 857 ms/token baseline is 36× below the memory wall (`docs/00-facts.md`), so an 8% traffic saving is lost in the noise of a defect that is not yet explained.
-2. **At the target 8 × 32K, q8 is worth 39%.** And it is worth that only after the weight path is fixed; before that, both numbers are hypothetical.
+2. **Above ~173K *resident tokens*, q8 is worth ~39 %.** That boundary is a property of
+   the file and the card — not a chosen shape — and any `B × C` above it is equivalent for
+   this purpose (`docs/plan/COST-LEDGER.md`). And it is worth that only after the weight
+   path is fixed; before that, both numbers are hypothetical.
 3. **Session count is where q8 actually pays**, and that is §1.3.
 
 ### 1.3 Capacity: the number that decides whether q8 is worth the kernels

@@ -63,11 +63,14 @@ is the only number that tells you *why* you are slow.
 ## What this means for the record
 
 Records are per-shape, because a single number hides the regime. Two shapes are
-the minimum for the ledger:
+the minimum for the ledger — a low-resident-token shape and a high one — and
+neither is a target:
 
-- `decode/1/4096` — batch 1 at 4K: weights 11.76 GB + KV 0.27 GB = 12.03 GB,
+- `decode/1/4096` — few resident tokens: weights 11.76 GB + KV 0.27 GB = 12.03 GB,
   wall ceiling **64.5 tok/s**.
-- `decode/8/32768` — the long-context operating point, KV-dominated.
+- `decode/<B>/<C>` with `B × C` above ~173K resident tokens — the regime where the
+  attention path overtakes the weights. Any factorisation of that product is the same
+  point for this purpose; see [`COST-LEDGER.md`](COST-LEDGER.md).
 
 A slice that improves one and regresses the other must say so.
 

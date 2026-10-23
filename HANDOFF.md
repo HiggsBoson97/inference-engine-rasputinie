@@ -3,7 +3,7 @@
 One handoff, updated in place. A superseded section is deleted outright, never
 tombstoned. This file is versioned with the repo and is the canonical copy.
 
-**As of 2026-10-23 15:43 CEST.** Verify anything dated before relying on it.
+**As of 2026-10-23 16:52 CEST.** Verify anything dated before relying on it.
 
 ---
 
@@ -26,36 +26,53 @@ sits at a corner where memory costs 16.0 % of the wall and instructions cost 16.
 See `docs/plan/DESIGN-instruction-budget.md` and the evidence in
 `docs/agents/production/run-artifacts/hypotheses/H-1.md` and `H-2.md`.
 
+**And no shape is the target.** The owner has never named a session count or a context
+length, so no `B × C` is "the operating point". Every per-token cost is a function of the
+shape, and what governs the plan is the **surface**: `docs/plan/COST-LEDGER.md` derives the
+two boundaries — KV overtakes the weights at `B × C ≈ 173K` resident tokens (bf16 KV), and
+the GDN state overtakes them at ~36 concurrent sequences. Optimising for a point on that
+surface is the failure `AGENTS.md` principle 1 names.
+
 ## 2. Phase
 
-**PLAN.** A1 is answered (refuted) and the ledger has one open row, `H-3`. The plan
-gate has not passed and nothing is built. The next unit of work is **`H-3`: prove or
-refute that the 521 → 645 GB/s gap is memory latency / MLP** — not the SPEC, and not
-another counter readout.
+**PLAN.** A1 is answered (refuted). The ledger has four open rows: `H-3` (latency/MLP),
+`H-4` (per-type rates, **running**), `H-5` (drafter selection, **running**), `H-6` (two-card
+round trip, brief written, queued behind the GPU) and `H-7` (grids + recipe, not started).
+The plan gate has not passed and nothing is built.
+
+The frame for what comes next is `docs/plan/COST-LEDGER.md`: rank measurements by the term
+they address, over the shape surface, never at a point. Its queue puts the **verify-width
+cost curve** first, then the **attention path**, then the round trip, then prefill.
 
 ## 3. Read order
 
-1. [`docs/plan/DESIGN-instruction-budget.md`](docs/plan/DESIGN-instruction-budget.md)
+1. [`docs/plan/COST-LEDGER.md`](docs/plan/COST-LEDGER.md) — **the frame**: every per-token
+   term as a function of `(B, C)`, the two boundaries, term provenance, and the ranked
+   measurement queue. Read this before proposing any optimisation.
+2. [`docs/plan/DESIGN-instruction-budget.md`](docs/plan/DESIGN-instruction-budget.md)
    — **the corrected two-bound model**: 521 achieved, 645 with memory free, 776 wall;
    why the old `n` model was void (a 32× unit error), the five ISA facts, and the
-   three falsifiers. **This is the frontier.** Its evidence is
+   three falsifiers. Its evidence is
    `docs/agents/production/run-artifacts/hypotheses/H-1.md` (the differential
    experiment) and `H-2.md` (the ISA census).
-2. [`docs/plan/REQUIREMENTS.md`](docs/plan/REQUIREMENTS.md) — hard constraints,
-   settled rules, six open items each naming its measurement.
-3. [`docs/00-facts.md`](docs/00-facts.md) — measured physics; every number
+3. [`docs/research/2026-10-23/s5-donor-transfer.md`](docs/research/2026-10-23/s5-donor-transfer.md)
+   — what to import from the six donor engines and what is dead on this card, each row
+   with the artifact read and the gate it must pass.
+4. [`docs/plan/REQUIREMENTS.md`](docs/plan/REQUIREMENTS.md) — hard constraints,
+   settled rules, eight open items each naming its measurement.
+5. [`docs/00-facts.md`](docs/00-facts.md) — measured physics; every number
    derives from it.
-4. [`docs/03-native-kernel-inventory.md`](docs/03-native-kernel-inventory.md) —
+6. [`docs/03-native-kernel-inventory.md`](docs/03-native-kernel-inventory.md) —
    the kernel set, keyed `(role, type)` = 72 pairs.
-5. [`docs/plan/RECORD.md`](docs/plan/RECORD.md) — standing records, measured vs
-   estimated, with the four shapes that still have no number.
-6. [`docs/plan/DECISION-packaging-iq3s.md`](docs/plan/DECISION-packaging-iq3s.md)
+7. [`docs/plan/RECORD.md`](docs/plan/RECORD.md) — standing records, measured vs
+   estimated, and the shapes that still have no number (records, not targets).
+8. [`docs/plan/DECISION-packaging-iq3s.md`](docs/plan/DECISION-packaging-iq3s.md)
    and [`DESIGN-batch-regimes.md`](docs/plan/DESIGN-batch-regimes.md) — serve the
    file as published; fuse 2–4 layers per launch.
-7. ADRs 0002 (fork), 0003 (representation), 0004 (FP8 excluded); `decisions/0001`
+9. ADRs 0002 (fork), 0003 (representation), 0004 (FP8 excluded); `decisions/0001`
    (llama.cpp excluded).
-8. [`docs/research/README.md`](docs/research/README.md) indexes two rounds and
-   says which conclusions are superseded. **`2026-10-23/` is current.**
+10. [`docs/research/README.md`](docs/research/README.md) indexes the rounds and says which
+    conclusions are superseded. **`2026-10-23/` is current; `s3`'s issue model is refuted.**
 
 ## 4. State, and the first check
 
@@ -99,6 +116,7 @@ a leftover process — check `etime` before killing, and kill by PID.
 | Manifest | `python3 ~/e1/mkmanifest.py <gguf> 30 <out>`; a 1-tensor manifest must be cut by hand (`awk 'NR==2'`) — the generator asserts ≥1 GiB and an empty manifest segfaults the harness |
 | Profiler | `rocprofv3` **1.4.1** at `/opt/rocm/bin`. Reads only `SQ_BUSY_CYCLES`, `SQ_WAVES`, `Wavefronts`; every instruction and `GL2C_*` counter is 0. See trap 16 |
 | Memory terms | **VRAM** = the card's GDDR6, 19.98 GiB, where the 776 GB/s wall is measured. **L2** = 96 MB on-die. **Host RAM** never appears in a timed path — no spill, no managed allocation. A "DRAM arm" in an older report means VRAM, not system memory |
+| Two-card link | PCIe 4.0 ×16, **no peer-to-peer DMA**. RCCL 2-rank all-reduce measured at **20.65 µs** amortised for 5120 elems, with a **~19.5 µs floor** up to 16 KiB that no `NCCL_*` setting improves; `pynccl` is ~2× cheaper than `torch.distributed` — never benchmark TP with the latter (`docs/research/18-tp-roccl.md`) |
 
 ## 6. Standing traps
 
@@ -152,6 +170,11 @@ Each has an incident behind it. Do not treat any as folklore.
 18. **A kernel shorter than ~3 ms cannot be measured on this card**, whatever the
     footprint. The L2-resident experiment at `rp=4` (0.22 ms kernels) gave 690.3 and
     366.7 GB/s on identical input. Use `rp=64` for a 38 MB footprint. (2026-10-23)
+19. **An unmeasured shape is not a target.** `RECORD.md` lists shapes with no number;
+    treating one of them as "the operating point" and optimising for it is the failure
+    `AGENTS.md` principle 1 names. It happened on 2026-10-23: a whole analysis was built
+    around `8 × 32 K`, a shape the owner had never named. The load-bearing variable is
+    resident tokens `B × C`; argue over the range, never at a point. (2026-10-23)
 
 ## 7. Open — each waits on a named measurement
 
@@ -165,56 +188,58 @@ Each has an incident behind it. Do not treat any as folklore.
 | A5 | The ~800 MiB anomaly's true cause | The clock-pinned re-run (trap 7) |
 | A6 | Does runtime adaptation earn its complexity | An ablation build per mechanism |
 | A7 | **What defines the i-quant grids, and is our inventory the publisher's recipe?** | The card says the files are **standard GGUF** ("run unmodified in llama.cpp"), so the grids are the standard tables; source them from `IST-DASLab/GSQ` (Apache-2.0), never llama.cpp. Diff our 72 `(role, type)` pairs against the publisher's `rco-allocation.txt` |
+| A8 | **What does the attention path cost?** 16 full-attention layers over paged KV — no kernel, no rate, and it is the leading term above the resident-token boundary | A paged decode-attention kernel over a context ladder, batch 1+, q8 and k8v4, checksum-gated. `COST-LEDGER.md` queue item 2 |
 
 ---
 
 ## 8. The research prompt to run next
 
 Copy this verbatim into a fresh session. It is the frontier as of the corrected
-two-bound model: 521 achieved, 645 with memory free, 776 wall.
+two-bound model, and it is shape-agnostic on purpose: no session count and no context
+length has been chosen.
 
 ```
-Prove or refute that the 521 -> 645 GB/s gap is memory latency, then price the
-two levers that follow. Every number from a command; every probe checksum-gated
-and committed.
+Build the cost ledger for this engine, then measure the terms it ranks. Every
+term cites either a measurement on this card or an assumption labelled with its
+error bar. Do not optimise anything until the ledger exists, and do not pick a
+shape: the owner has named no session count and no context length.
 
-1. LATENCY EXPOSURE. The kernel is 193 instruction words per 32 weights, of which
-   19 s_waitcnt and 31 s_delay_alu, and it issues 21 global-memory instructions
-   per 32 weights against k_read's 5 (which reaches 743.7 GB/s at the same
-   footprint). Build a variant that widens outstanding loads per wave -- unroll
-   the row loop so 2-4 block groups are in flight -- at fixed footprint,
-   footprint gate and GRIDMUL=8. Claim to test: the gap is latency, not
-   bandwidth. Acceptance: full >= 600 GB/s at 1.0700 GiB, gate VALID.
+1. LEDGER. Every byte on the critical path of one decode step, as a function of
+   B (concurrent sequences) and C (context length): weight read (10.57 GiB, once
+   per step, so 1/B per token), KV read (C x KV/position; 64 KiB bf16, 34 KiB
+   q8, over the 16 full-attention layers only), GDN recurrent state (159 MB per
+   sequence, read and written per token), drafter read (MTP head ~0.348 GB per
+   pass vs DFlash2 ~1.06 GB at 4.25 bpw, one pass per block), all-reduce or
+   handoff at 128x or 64x the measured round trip, launch overhead at 2-4 layer
+   fusion. Report each term as a share of the step across the plane, and the two
+   boundaries: B*C ~ 173K resident tokens where KV overtakes the weights, and
+   B ~ 36 where the GDN state does. State every input's provenance.
 
-2. FIELD LOADS. Merge the four odd-sized block fields into one aligned 16 B read
-   per lane group (a load-time permutation only; bytes unchanged). Report the
-   drop in global-memory instructions per 32 weights and the GB/s it buys.
+2. THE VERIFY CURVE. Measure step time at every verification width k = 1..8 on
+   the real dequant-GEMV, one card. ms(k) is not linear, so this curve - not a
+   model - decides draft depth. Report ms(k) and the marginal cost of the k-th
+   token.
 
-3. SIGN PATH. (a) current branch-free SWAR; (b) signs folded into a 512-entry LUT
-   at load; (c) scale amortised over 256 weights. Report GB/s AND instruction
-   words per 32 weights per variant. Measured fact to respect: deleting the sign
-   path is worth +13.8% in VRAM but only +7.3% with memory free, so judge every
-   variant at 1.0700 GiB, never in cache.
+3. THE ATTENTION PATH. No kernel exists, and it leads above the resident-token
+   boundary. Measure a paged decode-attention kernel at 4K/16K/64K/256K, batch 1
+   and 8, q8 and k8v4 (K 8-bit, V 4-bit), checksum-gated against a CPU
+   reference. Report GB/s, % of wall and ms/step.
 
-4. PRICE SPECULATION. Teacher-forced replay against the shipped MTP head to get
-   the acceptance distribution on our own prompts -- no engine needed. Apply the
-   depth rule run^k >= (tokens/ms)*row(k) to pick draft depth. Report effective
-   tokens per weight sweep.
+4. THE ROUND TRIP. Beat RCCL's ~19.5 us floor or report that you cannot:
+   mapped-publish flag, p99 over >=1000 iterations, single-card loopback as the
+   floor. Price TP=2 (128 all-reduces) and PP=2 (64 layer handoffs) at the
+   measured number, at B=1 and B=8.
 
-5. REPAIR OR REPLACE THE INSTRUMENT. Find a profiler build on this ROCm 10.1 /
-   gfx1100 host that reads SQ_INSTS_VALU and GL2C_MC_RDREQ_sum -- rocprof v1,
-   another rocprofiler-sdk, or a pinned rocprofv3. Do NOT block items 1-3 on it:
-   the differential method needs no profiler. If it cannot be repaired, record
-   that and move on.
+5. PREFILL. Price a 4K prompt: 2 x 26.9e9 params x 4096 FLOPs against measured
+   achievable FLOPS on one and on two cards. Report TTFT. If it exceeds 1 s it
+   is a first-class problem that S1 currently defers.
 
-6. VALIDATE THE WALL. Reproduce 776 GB/s with code that shares nothing with the
-   current probe: a write-only kernel and a different stride. >5% disagreement
-   means the wall is wrong and every percentage above must be re-read.
+6. ARBITER. Nothing enters RECORD.md until the publisher's GSQ reference
+   reproduces one dequantised block bit-for-bit, and a second kernel path with a
+   different instruction mix lands within 5% of the first.
 
-Deliver: the GB/s table per variant at 1.0700 GiB, the instruction words per 32
-weights per variant, the latency verdict, the acceptance distribution, the
-instrument status, and a verdict per item. Do not tune layout, page size or
-coalescing: read is already at 96% of the wall.
+Constraints: llama.cpp excluded; no weights across PCIe; gfx1100-native; VRAM is
+the budget; records never targets; no shape is the target.
 ```
 
 ## 9. Research assets, and what each is for
@@ -222,7 +247,9 @@ coalescing: read is already at 96% of the wall.
 | Path | Use it for |
 |---|---|
 | `docs/research/2026-10-23/s3-amd-sinks.md` | the ISA survey: VOPD limits, I-cache, page size, memory hints, queue behaviour — 42 sourced URLs. Read it for the **ISA facts**, not for an issue model |
-| `docs/research/2026-10-23/s4-topologies.md` | every two-card strategy priced per token: DP=2 = PP=2 = 2×, TP=2 = 1.47× |
+| `docs/research/2026-10-23/s4-topologies.md` | every two-card strategy priced per token: DP=2 = PP=2 = 2×, TP=2 = 1.47× — **read with `A4`'s correction in mind**: it prices aggregate throughput, not single-stream |
+| `docs/research/2026-10-23/s5-donor-transfer.md` | **what to import from the donors and what is dead here**: the verify-width cost curve (tensorfold), layer split as the two-card default (strata), k8v4 KV, and the per-row applicability gate |
+| `docs/plan/COST-LEDGER.md` | the shape surface: every per-token term as a function of `(B, C)`, the two boundaries, provenance, and the ranked measurement queue |
 | `docs/research/2026-10-23/s2-tensorfold-freetoken.md` | TensorFold's measured MTP depth rule; why the codebooks are not the cost; the LUT-instead-of-SWAR observation |
 | `docs/research/2026-10-23/s1-strata.md` | the GPU-publish/pre-launched-acquire handoff (~200 lines) and the measured **690:1 latency-to-bytes** ratio for a host-mediated boundary |
 | `docs/research/2026-10-22/` | round one: languages, megakernels, bandwidth, KV, serving knobs, 2025–26 sweep, correctness. Absolute figures ~25 % low; relative findings stand |

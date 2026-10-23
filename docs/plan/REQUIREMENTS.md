@@ -33,7 +33,7 @@ performance record lives in [`RECORD.md`](RECORD.md).
 | **R1** | Weights stay quantised as published. **No offline conversion, no prepared artifact, no second format on disk.** | `DECISION-packaging-iq3s.md` |
 | **R2** | Kernels see **one internal layout**; front-ends (GGUF, later a quantised safetensors container) normalise into it. | O1b |
 | **R3** | Compute is **bf16** (WMMA or `v_dot2_f32_f16`). No FP8 arithmetic, no int8 GEMM path unless a measurement justifies it. | ADR 0003/0004 |
-| **R4** | **q8 KV**, paged, dequant fused into attention. Worth ~8 % at batch 1 × 32K and ~39 % of traffic at 8 × 32K — it is a precondition for long-context capacity, not an optimisation. | research lane 04 |
+| **R4** | **q8 KV** (and k8v4 — K 8-bit, V 4-bit — where V tolerates it), paged, dequant fused into attention. It is a **capacity** precondition, not a speed optimisation: at low resident tokens the KV read is a minority of decode traffic and only overtakes the weight read above `B × C ≈ 173K` resident tokens at bf16 KV (~326K at q8). | research lane 04; `COST-LEDGER.md` |
 | **R5** | **The GDN recurrent state stays FP32.** 159 MB per sequence is 7 % of a 32K session; a shared low-precision state loses 5.9–13 points. The int8 *checkpoint* store for cached prefixes is the lever, and it is the same primitive speculation needs for rollback. | research lane 04 |
 
 ## 3. Structure — settled
@@ -56,6 +56,7 @@ performance record lives in [`RECORD.md`](RECORD.md).
 | **A5** | The physical cause of the ~800 MiB per-launch footprint cliff | TLB/page-walk hypothesis, untested. It constrains fusion depth, so it matters. |
 | **A6** | Whether runtime adaptation (O6) earns its complexity | Every adaptive mechanism ships with an ablation build, or its gain is unattributable. Not yet prototyped. |
 | **A7** | **What defines the i-quant grids, and is our inventory the publisher's recipe?** 84 % of the file's bytes are i-quant types whose dequant depends on grid tables; E1 used a **placeholder** codebook because the ordering "cannot be recovered from the file plus our docs". | The model card states the files are **standard GGUF** ("run unmodified in llama.cpp, Ollama, and LM Studio"), so the grids are the standard ggml tables for those type ids. Source them from the publisher's **Apache-2.0** code (`github.com/IST-DASLab/GSQ`), never from llama.cpp (`H3`). Validate our 72 `(role, type)` pairs against `tensor-allocation/Qwen3.8-27B-GSQ-RCO-IQ3_S.rco-allocation.txt`. |
+| **A8** | **What does the attention path actually cost?** 16 full-attention layers over paged KV — no kernel, no rate, and it is the leading term above the resident-token boundary. | A paged decode-attention kernel over a context ladder (4K/16K/64K/256K), batch 1 and higher, q8 and k8v4, checksum-gated against a CPU reference. Report GB/s, % of wall and ms/step. `COST-LEDGER.md` queue item 2. |
 
 ## 5. Settled and closed — do not reopen without a new measurement
 

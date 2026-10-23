@@ -5,17 +5,22 @@ for reasoning.**
 
 ## Current — `2026-10-23/` — round two
 
-Four lanes, all read from primary sources at `file:line`, all with a mechanism
-and a transfer verdict. **Start with `s3-amd-sinks.md`**: its instruction-issue
-ceiling is the finding that reordered the plan, and it is written up in
-`docs/plan/DESIGN-instruction-budget.md`.
+Five lanes, all read from primary sources at `file:line`, all with a mechanism and a
+transfer verdict. **Start with `s5-donor-transfer.md`** for what to build, and
+`docs/plan/DESIGN-instruction-budget.md` for the two-bound model that replaced the
+instruction-issue theory.
+
+**Correction, 2026-10-23:** `s3-amd-sinks.md`'s instruction-issue ceiling was **refuted by
+measurement** (`run-artifacts/hypotheses/H-1.md`, `H-2.md`). Its ISA facts stand; its model
+does not. Read it for the ISA, not for a ceiling.
 
 | file | answers |
 |---|---|
 | `s1-strata.md` | the real techniques in Strata's source, and why the split is break-even when the model fits one card |
 | `s2-tensorfold-freetoken.md` | their transferable mechanisms: a measured MTP depth rule, and why the codebooks are not the cost |
-| `s3-amd-sinks.md` | the gfx1100 sinks: instruction issue, VOPD, I-cache, page size, memory hints, queues — ranked by magnitude |
+| `s3-amd-sinks.md` | the gfx1100 sinks: instruction issue, VOPD, I-cache, page size, memory hints, queues — **ISA facts only; the issue model is refuted** |
 | `s4-topologies.md` | every two-card strategy over a 14.2 GiB/s link, priced in round-trips per token |
+| `s5-donor-transfer.md` | **what to import from the donors and what is dead on this card** — the verify-width cost curve, layer split as the two-card default, k8v4 KV, with an applicability gate per row |
 
 ## Current — `2026-10-22/`
 

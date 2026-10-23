@@ -39,12 +39,18 @@ every time**, and to be able to say why. This file is that record.
 
 ## Records that are not yet measured
 
-These are the shapes the engine will actually be judged on, and none has a
-number yet. They are listed so that "no record" is visible rather than implied.
+These are shapes the engine will be judged on, and none has a number yet. They are listed
+so that "no record" is visible rather than implied.
 
-- `decode/1/32768` — the long-context single stream.
-- `decode/8/32768` — the multi-session operating point, KV-dominated.
-- `prefill/4096` — prefill is compute-bound above 30 tokens, so this is a
+**They are records to keep, not targets to hit.** The owner has not named a session count or
+a context length, so no specific shape is "the operating point" and none may be treated as
+one. What governs the plan is the **surface**, not a point: the load-bearing variable is
+resident tokens `B × C`, and the boundaries are derived in
+[`COST-LEDGER.md`](COST-LEDGER.md).
+
+- `decode/1/<C>` — the single stream, over a context ladder (4K … 256K).
+- `decode/<B>/<C>` — the concurrent case, recorded as a family rather than a fixed pair.
+- `prefill/<N>` — prefill is compute-bound above 30 tokens, so this is a
   different regime and a different record.
 - `mtp/1/4096` — speculative decode, tokens per weight read.
 

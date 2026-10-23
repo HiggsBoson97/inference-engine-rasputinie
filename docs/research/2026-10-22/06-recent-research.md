@@ -41,7 +41,7 @@ Cross-check, because this table is the one thing here that could be wrong in a w
 Two consequences the rest of this document depends on — but first, the caveat that stops this table being misquoted: **every row assumes 100 % of the measured read wall.** At the ~94 %-of-wall efficiency a shipping RDNA engine reaches (a.1), the batch-1 numbers become ~48 tok/s at 4K and ~42 at 32K, and the batch-8 KV shares stay the same.
 
 1. **q8 KV (`R22`) is not a capacity nicety, it is the precondition for the concurrency target.** At bf16 the target is physically impossible on one card regardless of engine quality.
-2. **At the operating point, a faster GEMV is no longer the main lever.** Between batch 1 and batch 8×32K the binding term moves from weights to KV. Any 2026 technique that only accelerates weight streaming moves a 40 %-of-bytes term.
+2. **As resident tokens rise, a faster GEMV stops being the main lever.** Between a few resident tokens and a few hundred thousand, the binding term moves from weights to KV. Any 2026 technique that only accelerates weight streaming moves a 40 %-of-bytes term.
 
 ---
 

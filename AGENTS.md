@@ -38,7 +38,10 @@ a *good* change looks like when nothing forbids it. Each is traceable to a recor
 objective — it licenses leaving performance on the table the moment the number is met. The
 objective is **bandwidth efficiency**: achieved GB/s against the measured 776 GB/s wall,
 per shape. The discipline is to break the standing record every time and explain the shape.
-`docs/plan/RECORD.md` is the ledger; `REQUIREMENTS.md` H6/H7 is the rule.
+**No shape is the target either.** "B sessions at C context" is a record to keep, not an
+operating point to optimise for, unless the owner has named it — optimise the surface, not a
+point on it (`docs/plan/COST-LEDGER.md`). `docs/plan/RECORD.md` is the ledger;
+`REQUIREMENTS.md` H6/H7 is the rule.
 
 **2. gfx1100-native, one machine.** Every hot path is gfx1100 machine code reached through
 ROCm. No portability layer, no NVIDIA fallback kept "just in case", no abstraction that
