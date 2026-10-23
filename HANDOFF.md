@@ -164,6 +164,7 @@ Each has an incident behind it. Do not treat any as folklore.
 | A4 | Topology: TP=2, DP=2, or pipeline | **Reopened 2026-10-23: the recorded "DP=2" priced only aggregate throughput.** Weights are *sharded*, not moved; what crosses is partial sums — 128 all-reduces × ~10 KiB = **1.3 MB, 52 µs of link bytes per token**, so the cost is `128 × round-trip latency`. At the recorded 20.65 µs, TP=2 is **1.48× on a single stream** (15.1 → 10.2 ms/token) and 1.93× at 2 µs, and sharded weights free VRAM (~13 concurrent 32K sessions vs DP's ~7.5). DP=2 is **1.00× single-stream**, 2× only at concurrency ≥ 2. **Gate: mapped-memory round-trip latency** — that one number decides it |
 | A5 | The ~800 MiB anomaly's true cause | The clock-pinned re-run (trap 7) |
 | A6 | Does runtime adaptation earn its complexity | An ablation build per mechanism |
+| A7 | **What defines the i-quant grids, and is our inventory the publisher's recipe?** | The card says the files are **standard GGUF** ("run unmodified in llama.cpp"), so the grids are the standard tables; source them from `IST-DASLab/GSQ` (Apache-2.0), never llama.cpp. Diff our 72 `(role, type)` pairs against the publisher's `rco-allocation.txt` |
 
 ---
 
@@ -230,6 +231,9 @@ coalescing: read is already at 96% of the wall.
 | `docs/plan/TENSOR-INVENTORY.md` | the inventory: 72 `(role, type)` pairs, byte budget, GDN-only roles |
 | `https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` | quality anchors: IQ3_S matches BF16 on AIME25 and LCB v6 |
 | `https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2` | the DFlash2 drafter card: 2B BF16 block-diffusion, acceptance vs MTP (5.46 vs 5.02 GSM8K), throughput vs MTP (3.43× vs 2.59× at concurrency 1). Published on an **H200 with FA3** — the acceptance may transfer, the kernel stack will not |
+| `https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` | **the publisher's own card**, which says the files are *standard GGUF* ("run unmodified in llama.cpp, Ollama, LM Studio"). GSQ = Gumbel-Softmax Quantization (learns grid assignments + group scales); RCO = Riemannian Constrained Optimization (picks the type per tensor under a size budget). Apache-2.0 |
+| `tensor-allocation/Qwen3.8-27B-GSQ-RCO-IQ3_S.rco-allocation.txt` (same HF repo) | **the publisher's per-tensor recipe** — the ground truth our 72 `(role, type)` pairs must match. Diff it against `bench/manifests/iq3s.json` (A7) |
+| `https://github.com/IST-DASLab/GSQ` (Apache-2.0) | the legitimate source for the i-quant **grid tables** — it must implement the GGUF grids to quantise into them. E1 used a placeholder; 84 % of the file's bytes depend on the real ones. Never llama.cpp (`H3`) |
 
 ## 10. Skills for the next session, in order
 
