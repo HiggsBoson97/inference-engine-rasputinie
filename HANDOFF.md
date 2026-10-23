@@ -251,25 +251,22 @@ Each has an incident behind it. Do not treat any as folklore.
 
 ## 8. The next unit of work
 
-**Engine bring-up.** Not another measurement, not the SPEC. The sequence, in order, with the
-blocker each step removes:
+**Follow [`docs/plan/DEVELOPMENT-PLAN.md`](docs/plan/DEVELOPMENT-PLAN.md).** It sequences the
+work as slices, each carrying its own research *and* its own implementation, gated on evidence.
+Its four rules: absent hardware is not a software gap; delete rather than guard; one
+attributable delta per slice; the gate is not optional.
 
-1. **Review or discard `engine/bringup`** (`79157797`, `bb39bf0f`) — both unrun. Decide whether
-   the aiter removal and the honest GGUF gate are the right shape before building on them.
-2. **Make `model_config` importable** — the aiter module-scope import is blocker 1; the branch
-   has a candidate fix, unverified.
-3. **Force Triton** for attention. The HIP default routes to aiter's MFMA path, which cannot
-   run on RDNA3; a path that starts can still land there. Find where the default is chosen
-   (`arg_groups/model_override_base.py` ~`:326-327` per `14-sglang-gfx1100.md:19`).
-4. **Decide the GGUF kernel question honestly.** The engine needs `ggml_mul_mat_vec_a8` for
-   13 types; the ROCm wheel has none of them; the C++ source cannot compile (`__dp4a`
-   undeclared) and the C++ route is closed anyway. So: **a Triton MMVQ**, IQ3_S first,
-   correctness-gated against the file. Then the other types in `RECORD.md` order.
-   **The attention path is already covered** — sglang ships its own
-   `layers/attention/triton_backend.py` (118 KB), independent of aiter, so nothing needs
-   writing there, only selecting. The GGUF GEMV is the only missing kernel.
-5. **Then, and only then, take the baseline**: TTFT, decode tok/s, VRAM, and the shape printed
-   with it. That number is the "before" for everything else.
+The immediate next three slices, in order:
+
+- **0.1 The recipe** — diff the publisher's `rco-allocation.txt` against
+  `bench/manifests/iq3s.json`, tensor by tensor.
+- **0.2 The grids** — the i-quant grid tables from `IST-DASLab/GSQ` (Apache-2.0, never
+  llama.cpp), verified bit-exactly against the publisher's own reference. **84 % of the file's
+  bytes are undefined without them**, so this blocks every kernel.
+- **1.1 Remove aiter** — delete it from the reachable path and force
+  `--attention-backend triton`; not a guard. Then 1.2 (one generic Triton GGUF GEMV for all 11
+  types, correct but slow), 1.3 (wire it), **1.4 (the baseline)**. Nothing else can be measured
+  until 1.4 exists.
 
 **On "native" and Triton.** Triton's ROCm backend (`triton/backends/amd`) compiles Triton IR
 through LLVM's AMDGPU backend to gfx1100 HSACO and launches via the HIP runtime — so it emits
