@@ -81,5 +81,6 @@ Single-context: numbered `docs/adr/` plus a decision record. A root
 
 ### Build loop
 
-The fullstack loop (PLAN, CODE, PROMOTE, LEARN) with 2 slice slots. See
+The fullstack loop — **Discovery** (grill → hypotheses → SPEC → slices → rig → plan gate),
+then **Development** (CODE → FINAL → MERGE, then LEARN) — with 2 slice slots. See
 `docs/agents/control-plane.md`.
