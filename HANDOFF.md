@@ -207,9 +207,17 @@ Each has an incident behind it. Do not treat any as folklore.
     Never let an unmeasured type contribute at a benchmark's rate.
 21. **IQ3_XXS's measured rows looked *fast* (581–592 GB/s) and were wrong** — fp64 error 1.43,
     checksum mismatched. The wrong-but-fast signature is the most dangerous output here.
-22. **`aiter` is the HIP default and it is dead on gfx1100.** CK/ASM kernels are built for
-    gfx942/950; on this card they die at capture. **Triton is the only working backend; force
-    it explicitly.** Never port CK.
+22. **aiter's ASM/CK path is dead on gfx1100; its Triton subtree is not.** sglang's default HIP
+    decode routes to aiter's hand-written **MFMA** paged-decode assembly, and MFMA does not
+    exist on RDNA3 (clang: *needs target feature `mai-insts`*); the file is additionally
+    rejected by an allow-list with no gfx1100 entry, and its CK build for gfx11 is unverified.
+    But aiter's **Triton** kernels do compile here — `unified_attention` with explicit
+    `arch.is_rdna` tuning, `flash_attn_triton_amd` with gfx1100 in `RDNA_ARCHS` — so the working
+    half of aiter *is* Triton. **Depend on Triton directly, never on aiter, and force the
+    attention backend explicitly because the HIP default is aiter.** `19-aiter-gfx1100.md` also
+    records that the crash first attributed to aiter was sglang's own
+    `reset_verify_attn_plan_cache` hiding a missing install — a broken call path, not an
+    architecture verdict.
 23. **A probe's recommendation is not evidence.** `H-10` proposed adding `gguf_kernel.cu` to
     `setup_rocm.py`; it cannot compile, because `__dp4a` is undeclared for gfx1100. Check a
     recommendation's load-bearing fact before acting on it.
@@ -237,8 +245,8 @@ blocker each step removes:
    the aiter removal and the honest GGUF gate are the right shape before building on them.
 2. **Make `model_config` importable** — the aiter module-scope import is blocker 1; the branch
    has a candidate fix, unverified.
-3. **Force Triton** for attention. The HIP default is aiter and it is dead here; a path that
-   runs can still route into CK kernels. Find where the default is chosen
+3. **Force Triton** for attention. The HIP default routes to aiter's MFMA path, which cannot
+   run on RDNA3; a path that starts can still land there. Find where the default is chosen
    (`arg_groups/model_override_base.py` ~`:326-327` per `14-sglang-gfx1100.md:19`).
 4. **Decide the GGUF kernel question honestly.** The engine needs `ggml_mul_mat_vec_a8` for
    13 types; the ROCm wheel has none of them; the C++ source cannot compile (`__dp4a`
@@ -247,10 +255,17 @@ blocker each step removes:
 5. **Then, and only then, take the baseline**: TTFT, decode tok/s, VRAM, and the shape printed
    with it. That number is the "before" for everything else.
 
-Open question recorded rather than resolved: `REQUIREMENTS.md` S4 says every device-touching
-hot path is native, and a Triton IQ3_S GEMV has never been measured against the 521 GB/s asm
-kernel. "Bring up on Triton, replace the hot kernel natively later" is the reconciling
-reading — confirm with the owner before it hardens into plan.
+**On "native" and Triton.** Triton's ROCm backend (`triton/backends/amd`) compiles Triton IR
+through LLVM's AMDGPU backend to gfx1100 HSACO and launches via the HIP runtime — so it emits
+native gfx1100 ISA, and `REQUIREMENTS.md` S4's "native hot path" is satisfied in the
+code-generation sense. What S4 cannot assume is *control*: Triton 3.8.0 exposes `tl.dot` and
+`tl.inline_asm_elementwise` but not VGPR allocation, instruction scheduling, delay-slot
+placement or load ordering — and the 521 GB/s kernel depends on all four (193 words per 32
+weights, 31 `s_delay_alu`, hand-placed `v_dot4_i32_i8`). **The open question is therefore not
+"Triton or native" but "can Triton's scheduler reach 521 GB/s on this GEMV", which is
+unmeasured.** A third option exists and is worth reading before concluding: ADR 0001 records
+that **TensorFold ships hand-written HIP GEMV kernels for gfx1100 that already serve this 27B**
+(`docs/adr/0001-engine-composition.md:26`) — that is the ceiling to beat or to borrow.
 
 ```
 Prompt for the next session, verbatim:
