@@ -55,48 +55,59 @@ Small and fast beats complete. (H9)
 in scope — the shipped MTP head and the DFlash2 block-diffusion drafter — and the drafter's
 own weight read is part of the per-step budget, never free. (H2)
 
-**5. VRAM is the budget.** The model, the drafter and every KV cache share 19.98 GiB per
+**5. Parallelise the calculations, not just the requests.** Both cards work on every token
+where the latency budget allows. A shard-native kernel — row/column-parallel plus a reduction
+— is the default shape, so topology is a dispatch decision rather than an architectural fork.
+Replication is the fallback when a reduction cannot be hidden, never the default. (A4)
+
+**6. VRAM is the budget.** The model, the drafter and every KV cache share 19.98 GiB per
 card. Any addition names what it displaces, in GB and in concurrent 32K sessions. Spilling to
 host memory is not a slow path, it is a design failure. (H1)
 
-**6. Measure, then believe.** A number without its baseline in the same artifact is an
+**7. Measure, then believe.** A number without its baseline in the same artifact is an
 opinion. When a document and a measurement disagree, the measurement wins and the document is
 corrected that turn. (H10)
 
-**7. Gate every probe on a checksum.** A fast wrong kernel is worse than a slow right one: an
+**8. Gate every probe on a checksum.** A fast wrong kernel is worse than a slow right one: an
 ungated probe once reported 230 % of the wall because the compiler hoisted its loads. No row
 enters a report without a data-dependent checksum replayed on the host.
 
-**8. Validate the instrument before trusting the reading.** Ask the instrument for a known
+**9. Validate the instrument before trusting the reading.** Ask the instrument for a known
 quantity first — a canary with a countable answer. A zero from a profiler is a broken counter
 until proven otherwise; on this host `rocprofv3` reads no instruction counter at all.
 
-**9. Reproduce before recording.** Nothing enters `RECORD.md` or the hypothesis ledger without
+**10. Reproduce before recording.** Nothing enters `RECORD.md` or the hypothesis ledger without
 an independent reproduction, including anything a subagent reports. Cite the row; never
 re-derive a number from prose.
 
-**10. Correctness is designed, not assumed.** Where a format or kernel claims losslessness,
+**11. Correctness is designed, not assumed.** Where a format or kernel claims losslessness,
 greedy output matches the reference exactly; where it does not, the bounded error is stated
 with its tolerance *before* the run. A 32-token match is an arbiter, not the method. (H11)
 
 ## Two cards, one machine
 
-Two RX 7900 XT at 19.98 GiB each: **39.96 GiB of VRAM and 2× the compute**, joined by
-PCIe 4.0 ×16 with **no peer-to-peer DMA**. That asymmetry is a design problem, not a
-limitation to accept:
+Two RX 7900 XT at 19.98 GiB each: **39.96 GiB of VRAM, 2× the compute, 2× the bandwidth**,
+joined by PCIe 4.0 ×16 with **no peer-to-peer DMA**. The goal is to make the pair behave as
+one card that is double in everything.
 
-- **Bandwidth is per card, not pooled.** 776 GB/s each, 1552 GB/s aggregate — but only when
-  the cards do *independent* work. Two cards cooperating on one token double nothing.
-- **The link is ~25–30 GB/s and host-mediated.** Never move weights across it per token. A
-  10 KiB handoff per token is affordable; a 10 GiB one is not. The measured ratio for a
-  host-mediated boundary is **690:1 latency-to-bytes** — price handoffs in round-trips,
-  never in bytes.
-- **Replicate before you shard.** For this quant, DP=2 (a full replica per card) costs zero
-  link traffic and takes 2× aggregate throughput; TP=2 spends 128 all-reduces per step
-  (~2.64 ms, 27 % of it) to buy 1.47×; pipeline equals replication at ≥2 concurrent
-  requests. **DP=2 for IQ3_S; PP=2 only if a larger quant is ever used.**
-- **Each replica carries its own model and its own drafter**, so *per-card* VRAM — not the
-  aggregate — sets the KV budget and therefore the number of concurrent 32K sessions.
+- **Weights are sharded, never moved.** Tensor parallelism gives each card a permanent half
+  of every tensor. What crosses the link is the partial sums: **128 all-reduces of ~10 KiB
+  per token — 1.3 MB, 52 µs of link time.** The cost is `128 × round-trip latency`, never the
+  bytes. Nobody moves weights across PCIe at inference time; that is a death sentence at any
+  link generation.
+- **TP is what makes one token faster.** At the recorded 20.65 µs round trip, TP=2 turns a
+  15.1 ms/token sweep into 10.2 ms (**1.48×**); at a 2 µs round trip, 7.8 ms (**1.93×** —
+  essentially perfect doubling). DP=2 gives **1.00× on a single stream**: one card does the
+  work and the other idles. It reaches 2.00× only at concurrency ≥ 2.
+- **TP also buys KV capacity.** Sharded weights are 5.89 GB per card instead of 11.77, and KV
+  shards by head, so the pair holds ~13 concurrent 32K sessions against DP's ~7.5.
+- **The lever is round-trip latency.** Every microsecond off it is ~0.13 ms off the step,
+  because there are 128 of them. 20.65 µs is a host-mediated path; GPU-publish /
+  pre-launched-acquire is the documented alternative and is the thing to measure.
+- **Build shard-native from the first kernel.** A row/column-parallel GEMV plus a reduction is
+  a dispatch flag, not a rewrite. Topology then becomes a per-operating-point decision — TP
+  for single-stream latency and long context, DP for coupling-free aggregate — instead of an
+  architecture chosen before the measurement exists.
 
 ## Sync topology
 
