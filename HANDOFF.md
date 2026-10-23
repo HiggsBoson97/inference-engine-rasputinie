@@ -63,10 +63,22 @@ strip it to what this model and this card need, then optimise in situ. `H-10` is
 (does the vendored sglang serve this GGUF on ROCm, which dequant path, at what tok/s) plus the
 deletion map. Scratch harnesses remain valid only for questions the engine cannot yet answer.
 
-The decisive engine fact already known: `engine/python/sglang/srt/layers/quantization/gguf.py`
-declares all 13 of our weight types, but the fast path is a CUDA-only MMQ kernel and the
-fallback is `dequantize → bf16 matmul` — a different algorithm from our measured 521 GB/s
-fused `dp4a` GEMV.
+The decisive engine facts, measured (`H-10`, 2026-10-23):
+
+- **The engine cannot serve this file on ROCm at all.** Four ordered blockers: `aiter`
+  imported at module scope under `if _is_hip` and not installed → `model_config` will not
+  import; `ModelConfig` hard-refuses GGUF on ROCm (`model_config.py:2128-2133`); on HIP
+  `gguf.py` has no import branch, so the five `ggml_*` names are undefined; and the ops are
+  absent from the ROCm wheel (0 of 47 `sgl_kernel` ops are ggml).
+- **At batch 1 the engine wants MMVQ** (`ggml_mul_mat_vec_a8`), not the dequant→bf16 path —
+  that path is taken only at ≥ 9 tokens. So the target kernel is the **fused int8 GEMV**,
+  which is exactly the E1 harness's kernel.
+- **The CUDA source does not port by wiring.** `__dp4a` is *undeclared* for gfx1100 in this
+  toolchain (verified: `use of undeclared identifier '__dp4a'`), so `vecdotq.cuh`'s dp4a sites
+  must be rewritten to inline-asm `v_dot4_i32_i8` — the technique E1 already proved.
+- **The deletion surface is real:** of 8,338 measured files, **5,363 are dead on any path**
+  (1.48 M LOC), 27 are CUDA-gated, 1,422 lazy-only, and **1,070 are the live runtime closure**
+  (455 k LOC).
 
 ## 3. Read order
 
