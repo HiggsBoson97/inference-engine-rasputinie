@@ -207,17 +207,19 @@ Each has an incident behind it. Do not treat any as folklore.
     Never let an unmeasured type contribute at a benchmark's rate.
 21. **IQ3_XXS's measured rows looked *fast* (581–592 GB/s) and were wrong** — fp64 error 1.43,
     checksum mismatched. The wrong-but-fast signature is the most dangerous output here.
-22. **aiter's ASM/CK path is dead on gfx1100; its Triton subtree is not.** sglang's default HIP
-    decode routes to aiter's hand-written **MFMA** paged-decode assembly, and MFMA does not
-    exist on RDNA3 (clang: *needs target feature `mai-insts`*); the file is additionally
-    rejected by an allow-list with no gfx1100 entry, and its CK build for gfx11 is unverified.
-    But aiter's **Triton** kernels do compile here — `unified_attention` with explicit
-    `arch.is_rdna` tuning, `flash_attn_triton_amd` with gfx1100 in `RDNA_ARCHS` — so the working
-    half of aiter *is* Triton. **Depend on Triton directly, never on aiter, and force the
+22. **aiter's ASM/CK path is dead on gfx1100; its Triton subtree is not.** The sharpest fact:
+    **aiter's two allow-lists disagree.** `aiter/jit/core.py:456-477` accepts `gfx1100` by name,
+    while `csrc/cpp_itfs/utils.py:131-147` — the path every hand-written C++/CK per-shape module
+    goes through — accepts only CDNA, and its `DEFAULT_GPU_ARCH` is literally `amdgpu-arch`'s
+    output, which on rasputin is `gfx1100`, so the assert fires immediately. The MFMA paged-decode
+    kernel would also fail on its own (`needs target feature mai-insts`) because MFMA does not
+    exist on RDNA3. But aiter's **Triton** kernels do compile here — `unified_attention` with
+    explicit `arch.is_rdna` tuning, `flash_attn_triton_amd` with gfx1100 in `RDNA_ARCHS` — so the
+    working half of aiter *is* Triton. **Depend on Triton directly, never on aiter, and force the
     attention backend explicitly because the HIP default is aiter.** `19-aiter-gfx1100.md` also
     records that the crash first attributed to aiter was sglang's own
     `reset_verify_attn_plan_cache` hiding a missing install — a broken call path, not an
-    architecture verdict.
+    architecture verdict. (2026-10-23)
 23. **A probe's recommendation is not evidence.** `H-10` proposed adding `gguf_kernel.cu` to
     `setup_rocm.py`; it cannot compile, because `__dp4a` is undeclared for gfx1100. Check a
     recommendation's load-bearing fact before acting on it.
@@ -252,6 +254,9 @@ blocker each step removes:
    13 types; the ROCm wheel has none of them; the C++ source cannot compile (`__dp4a`
    undeclared) and the C++ route is closed anyway. So: **a Triton MMVQ**, IQ3_S first,
    correctness-gated against the file. Then the other types in `RECORD.md` order.
+   **The attention path is already covered** — sglang ships its own
+   `layers/attention/triton_backend.py` (118 KB), independent of aiter, so nothing needs
+   writing there, only selecting. The GGUF GEMV is the only missing kernel.
 5. **Then, and only then, take the baseline**: TTFT, decode tok/s, VRAM, and the shape printed
    with it. That number is the "before" for everything else.
 
