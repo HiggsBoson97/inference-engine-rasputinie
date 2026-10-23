@@ -60,39 +60,47 @@ have is a defect, not insurance. (H5)
 **3. The engine is the minimum that runs this model on this box.** Vendored sglang is raw
 material, not a dependency to preserve: strip it to what the decode path and the gate path
 actually touch, delete rather than configure, and make every retained file earn its place.
-Small and fast beats complete. (H9)
+**Delete, do not guard** — a `try/except` around a dead dependency keeps it alive and hides the
+next failure. Small and fast beats complete. (H9)
 
-**4. Speculation is core, not an optimisation.** Decode pays one weight sweep per
+**4. Absent hardware is not a software gap.** This card has no matrix cores and no FP8. Never
+emulate, shim or approximate them, and never measure against hardware that is not here — no
+CDNA comparison, no aiter, no FP8 reference. But where the *hardware* supports something and the
+*software* does not — the GGUF dequant-GEMV exists only as CUDA source that cannot compile on
+gfx1100 — the software is ours to write. That distinction decides every "can we just adapt
+this?" question.
+
+**5. Speculation is core, not an optimisation.** Decode pays one weight sweep per
 *verification step*, so accepted tokens per step divide the per-token cost. Both drafters are
 in scope — the shipped MTP head and the DFlash2 block-diffusion drafter — and the drafter's
 own weight read is part of the per-step budget, never free. (H2)
 
-**5. Parallelise the calculations, not just the requests.** Both cards work on every token
+**6. Parallelise the calculations, not just the requests.** Both cards work on every token
 where the latency budget allows. A shard-native kernel — row/column-parallel plus a reduction
 — is the default shape, so topology is a dispatch decision rather than an architectural fork.
 Replication is the fallback when a reduction cannot be hidden, never the default. (A4)
 
-**6. VRAM is the budget.** The model, the drafter and every KV cache share 19.98 GiB per
+**7. VRAM is the budget.** The model, the drafter and every KV cache share 19.98 GiB per
 card. Any addition names what it displaces, in GB and in concurrent 32K sessions. Spilling to
 host memory is not a slow path, it is a design failure. (H1)
 
-**7. Measure, then believe.** A number without its baseline in the same artifact is an
+**8. Measure, then believe.** A number without its baseline in the same artifact is an
 opinion. When a document and a measurement disagree, the measurement wins and the document is
 corrected that turn. (H10)
 
-**8. Gate every probe on a checksum.** A fast wrong kernel is worse than a slow right one: an
+**9. Gate every probe on a checksum.** A fast wrong kernel is worse than a slow right one: an
 ungated probe once reported 230 % of the wall because the compiler hoisted its loads. No row
 enters a report without a data-dependent checksum replayed on the host.
 
-**9. Validate the instrument before trusting the reading.** Ask the instrument for a known
+**10. Validate the instrument before trusting the reading.** Ask the instrument for a known
 quantity first — a canary with a countable answer. A zero from a profiler is a broken counter
 until proven otherwise; on this host `rocprofv3` reads no instruction counter at all.
 
-**10. Reproduce before recording.** Nothing enters `RECORD.md` or the hypothesis ledger without
+**11. Reproduce before recording.** Nothing enters `RECORD.md` or the hypothesis ledger without
 an independent reproduction, including anything a subagent reports. Cite the row; never
 re-derive a number from prose.
 
-**11. Correctness is designed, not assumed.** Where a format or kernel claims losslessness,
+**12. Correctness is designed, not assumed.** Where a format or kernel claims losslessness,
 greedy output matches the reference exactly; where it does not, the bounded error is stated
 with its tolerance *before* the run. A 32-token match is an arbiter, not the method. (H11)
 
