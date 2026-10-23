@@ -76,6 +76,17 @@ Plus one question not yet a row: prefill/TTFT (~1.6–3.2 s for 4K, deferred by 
   27 CUDA-gated, 1,422 lazy-only, **1,070 live (455 k LOC)**; 456 C++ files execute nothing
   but are the source of the missing ops.
 
+**Triton is native here, and gfx1100 is a good kernel target — say it precisely.** A Triton 3.8.0
+kernel compiles to `amdgcn` + `hsaco` for `gcnArchName gfx1100` through LLVM's AMDGPU backend
+(verified by running one: vector add, 1 M elements, max abs err 0.0, ISA shows
+`buffer_load_b128`). `layers/attention/triton_backend.py` has zero aiter references. So
+"aiter is dead on this card" is a statement about **a library built for CDNA**, not about the
+hardware: gfx1100 has 84 CUs / 5376 lanes / 15.06 T lane-ops/s, 776 GB/s VRAM at 97 % of spec,
+96 MB L2, half-rate `v_dot4_i32_i8` and full-rate `v_dot2_f32_f16`, and our hand-written kernel
+reached 521 GB/s = 67 % of wall, 81 % of its own ceiling. What it lacks is **matrix cores
+(MFMA) and FP8** — irrelevant to a memory-bound batch-1 GEMV, relevant to prefill, where a 4K
+prompt is compute-bound. Good target for kernels; poor target for *porting CDNA kernels*.
+
 ## 3. Read order
 
 1. [`docs/plan/COST-LEDGER.md`](docs/plan/COST-LEDGER.md) — **the frame**: every per-token

@@ -28,16 +28,15 @@ Read before writing anything: `HANDOFF.md`,
 3. **This project runs the fullstack loop from PLAN onward.** SPEC, slices as
    GitHub issues, coder subagents, gated promotion. See
    `docs/agents/control-plane.md`.
-4. **aiter's ASM/CK path is excluded; Triton is the kernel backend.** sglang's default HIP
-   decode routes to aiter's hand-written **MFMA** kernels, and MFMA does not exist on RDNA3 —
-   the file is also rejected by an allow-list with no gfx1100 entry; its CK build for gfx11 is
-   unverified. aiter's **Triton** subtree *does* compile here (`unified_attention` with explicit
-   `arch.is_rdna` tuning, `flash_attn_triton_amd` with gfx1100 in `RDNA_ARCHS`) — which is
-   Triton anyway, so depend on Triton directly and never on aiter. Force the attention backend
-   explicitly: the HIP default is aiter. Evidence: `docs/research/19-aiter-gfx1100.md`,
-   `14-sglang-gfx1100.md:19,42`. `19-` also records that the crash we first saw was sglang's own
-   `reset_verify_attn_plan_cache` hiding a missing install — a broken call path, not an
-   architecture verdict.
+4. **aiter's ASM/CK path is excluded; Triton is the kernel backend — and Triton compiles
+   straight to gfx1100, not through anyone.** Verified on this box: a Triton 3.8.0 kernel
+   emits `amdgcn` + `hsaco` for `gcnArchName gfx1100` through LLVM's AMDGPU backend, and
+   `layers/attention/triton_backend.py` (118 KB) contains **zero** references to aiter. aiter
+   is a *consumer* of Triton, not a layer under it: its hand-written **MFMA** paged-decode
+   cannot run on RDNA3 (no matrix cores; clang: *needs `mai-insts`*), and the file is rejected
+   by an allow-list with no gfx1100 entry. Its **Triton** subtree does compile — which is
+   Triton anyway. Force the attention backend explicitly: the HIP default is aiter. Evidence:
+   `docs/research/19-aiter-gfx1100.md`, `14-sglang-gfx1100.md:19,42`.
 
 ## Principles
 
