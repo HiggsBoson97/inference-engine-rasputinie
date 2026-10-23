@@ -22,6 +22,9 @@ every time**, and to be able to say why. This file is that record.
 | `gemv/clean-4bit 1.04 GiB, 8 passes` | **752.5 GB/s** | 97.0 % | measured | `WALL-2026-10-22.md` |
 | `gemv/iq3s read-only 1.07 GiB` | 717.7 GB/s | 92.5 % | measured | E1 final, 30 real tensors |
 | `gemv/iq3s 1.07 GiB, as published` | **516.4 GB/s** | 66.6 % | measured | E1 final, 10/10 rows gated |
+| `gemv/iq3s 1.07 GiB, 2026-10-23 re-run` | **522.7 GB/s** | 67.4 % | measured | `run-artifacts/hypotheses/H-1.md` §5 |
+| `gemv/iq3s 38.3 MB, L2-resident, rp=64` | **645.1 GB/s** | **83.1 %** | measured — **the kernel's memory-free ceiling** | `H-1.md` §5, median of 3 |
+| `gemv/iq3s 38.3 MB, L2-resident, best` | 679.6 GB/s | 87.6 % | measured | `H-1.md` §5 |
 | `gemv/iq3s sign-decode removed` (ablation) | 608.2 GB/s | 78.4 % | measured | E1 — numerically wrong, diagnostic only |
 | `gemv/iq3s expanded 1.51× (signs kept)` | 618.1 GB/s | 79.7 % | measured | E1 — rejected |
 | `gemv/iq3s expanded, signs dropped` | 784.5 GB/s | 101.1 % | measured, **above the wall — not trusted** | E1 |
