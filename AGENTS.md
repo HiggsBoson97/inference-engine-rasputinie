@@ -28,6 +28,13 @@ Read before writing anything: `HANDOFF.md`,
 3. **This project runs the fullstack loop from PLAN onward.** SPEC, slices as
    GitHub issues, coder subagents, gated promotion. See
    `docs/agents/control-plane.md`.
+4. **`aiter` is excluded on this card, and Triton is the kernel backend.** aiter's
+   CK/ASM kernels are built for gfx942/gfx950; on gfx1100 they die at capture
+   (`asserts on cpp_itfs`) and its rope kernels need `ck_tile` types that do not
+   build here. Worse, the HIP attention default is **aiter**, so a working path can
+   still route into dead kernels — force Triton explicitly. Evidence:
+   `docs/research/14-sglang-gfx1100.md:19,42,44` and
+   `docs/03-native-kernel-inventory.md:72`. Do not spend effort porting CK.
 
 ## Principles
 

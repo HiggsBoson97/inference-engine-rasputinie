@@ -75,7 +75,13 @@ The decisive engine facts, measured (`H-10`, 2026-10-23):
   which is exactly the E1 harness's kernel.
 - **The CUDA source does not port by wiring.** `__dp4a` is *undeclared* for gfx1100 in this
   toolchain (verified: `use of undeclared identifier '__dp4a'`), so `vecdotq.cuh`'s dp4a sites
-  must be rewritten to inline-asm `v_dot4_i32_i8` — the technique E1 already proved.
+  must be rewritten to inline-asm `v_dot4_i32_i8` — the technique E1 already proved. **But the
+  C++ route is closed anyway:** aiter is dead on this card and Triton is the working backend
+  (`AGENTS.md` hard rule 4, trap 22). The open question this leaves: a Triton IQ3_S GEMV has
+  not been measured, and it may not reach the 521 GB/s the hand-written asm kernel reaches.
+  `REQUIREMENTS.md` S4 still says every device-touching hot path is native — so "bring up on
+  Triton, replace the hot kernel natively later" is the reconciling reading, not "Triton
+  forever".
 - **The deletion surface is real:** of 8,338 measured files, **5,363 are dead on any path**
   (1.48 M LOC), 27 are CUDA-gated, 1,422 lazy-only, and **1,070 are the live runtime closure**
   (455 k LOC).
@@ -220,6 +226,14 @@ Each has an incident behind it. Do not treat any as folklore.
     above IQ3_S's gated 516 — the wrong-but-fast signature. A plausible number from a
     kernel that cannot reproduce the file is the most dangerous output this project
     produces. (2026-10-23)
+22. **`aiter` is the HIP default and it is dead on gfx1100.** `get_platform().is_hip`
+    returns `"aiter"` for the attention backend, arch-blind, and aiter's CK/ASM kernels are
+    built for gfx942/gfx950: on this card they die at capture (`asserts on cpp_itfs`) and
+    its rope kernels want `ck_tile` types that do not build here. So a path can look
+    healthy and route into dead kernels. **Triton is the only backend that works on this
+    card; force it explicitly.** Never spend effort porting CK. Evidence:
+    `docs/research/14-sglang-gfx1100.md:19,42,44`, `03-native-kernel-inventory.md:72`.
+    (2026-10-23)
 
 ## 7. Open — each waits on a named measurement
 
