@@ -5,6 +5,7 @@ or missing a citation.
 
 ## State
 
+- [`../HANDOFF.md`](../HANDOFF.md) — the resume document for the sglang rework: concepts, bounds, the op contract, the unit sequence.
 - [`status.md`](status.md) — the frontier unit, its proof, and the last landed state.
 - [`plan/DEVELOPMENT-PLAN.md`](plan/DEVELOPMENT-PLAN.md) — every row a unit with start / goal / proof.
 
