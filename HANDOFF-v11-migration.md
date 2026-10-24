@@ -28,7 +28,12 @@ cd "$REPO"
 git log --oneline -1 && git status --short                  # expect: clean
 wc -l AGENTS.md                                             # expect: 54
 find docs -type f | wc -l                                   # expect: 26
-python3 bench/04_recipe_diff.py --help >/dev/null && echo bench-ok
+python3 -c "import ast; ast.parse(open('bench/04_recipe_diff.py').read()); print('bench parses')"
+# the unit-0.1 proof needs the GGUF, so it runs on the host:
+#   scp bench/04_recipe_diff.py bench/manifests/rco-iq3s-allocation.txt rasputin:/tmp/ && \
+#   ssh rasputin '~/venv/sglang-fork/bin/python /tmp/04_recipe_diff.py \
+#     ~/local-inference/models/gguf/Qwen3.8-27B-GSQ-RCO-IQ3_S.gguf /tmp/rco-iq3s-allocation.txt'
+#   expect: "matched 851/851 ... RESULT: PASS", exit 0
 grep -rho "_archive/2026-10-24/[A-Za-z0-9_./-]*" docs | sort -u | while read -r p; do
   [ -e "$p" ] || echo "DANGLING: $p"; done                  # expect: no output
 ssh rasputin '~/venv/sglang-fork/bin/python -c "import sglang; print(sglang.__version__)"'
