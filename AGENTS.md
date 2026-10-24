@@ -1,189 +1,54 @@
-# AGENTS.md — operating rules for this repo
+# rasputinie — a bespoke inference engine for one machine and one model
 
-`rasputinie` is a local inference engine built for exactly one machine, `rasputin`.
-It runs exactly one model — Qwen3.8-27B (`qwen3_5`, 48 gated-deltanet + 16
-full-attention layers), from the `ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` IQ3_S
-file with its MTP head — faster than a general-purpose runtime by assuming this
-hardware and nothing else.
-Correctness is proven against a reference, speed against a measured baseline: no
-claim ships without a number.
+Two RX 7900 XT (gfx1100, RDNA3, 19.98 GiB each, PCIe 4.0 ×16, **no peer DMA**), 60 GiB DDR5, one
+host. It serves exactly `ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF` IQ3_S — a **mixed-precision** file,
+11 quant types, IQ3_S only 31 % of the bytes — with its MTP head. The objective is **bandwidth
+efficiency**: achieved GB/s against the measured **776 GB/s** wall, per shape. Nothing ships without
+a number. The engine is a fork of sglang, editable in place at `engine/` (`D-04`).
 
-Hardware, one line: 2× AMD RX 7900 XT (gfx1100, 19.98 GiB each, **776 GB/s
-measured read wall**, PCIe 4.0 ×16 with **no peer-to-peer DMA**), 60 GiB
-DDR5-5600 at 46.4 GiB/s copy, 4.4 GiB/s NVMe, ROCm 10.1 / hipcc 7.16.
+## Invariants
 
-Read before writing anything: `HANDOFF.md`,
-`docs/plan/REQUIREMENTS.md`, `docs/00-facts.md`,
-`docs/03-native-kernel-inventory.md`.
+1. **`HIP_VISIBLE_DEVICES=1`.** HIP 0 is the display card; a load there wedged the desktop once.
+2. **llama.cpp is excluded** — no baseline, no reference, no derived code, not installed (`D-02`).
+3. **FP8 is excluded** as a format (`D-03`).
+4. **aiter is excluded; force Triton explicitly.** The HIP default resolves to aiter, whose MFMA
+   kernels cannot run on RDNA3 (`D-07`).
+5. **Every probe is checksum-gated.** A check that cannot fail is not a check.
+6. **Measure only kernels ≥ 3 ms, clocks pinned.** A 1.6 ms kernel once reported 619 GB/s.
+7. **`GRIDMUL=8`** for the E1 harness → `grid=336×256`. A stray `GRIDMUL=4` reports 436, not 521.
+8. **No shape is the target.** Report `(B, C)` with every rate; the variable is resident tokens
+   `B × C` (`D-06`).
+9. **Delete, do not guard.** A `try/except` around a dead dependency keeps it alive and hides the
+   next failure.
+10. **Absent hardware is not a software gap.** Never emulate MFMA or FP8; do write the software the
+    hardware supports and the tree lacks.
+11. **No weights across PCIe.** Tensor parallelism shards them permanently; what crosses is partial
+    sums (`D-09`).
+12. **VRAM is the budget** — model, drafter and KV inside 19.98 GiB per card. No host spill.
+13. **Kill by PID**, never `pkill -f` — it matches your own ssh command line.
+14. **Reproduce before recording**, including anything a subagent reports.
+15. **Validate the instrument with a canary.** A zero from a profiler is a broken counter until
+    proved otherwise.
 
-## Three hard rules
+## Commands
 
-1. **The excluded engine stays excluded.** llama.cpp is not a baseline, not a
-   reference, contributes no code or layout, and is not installed on `rasputin`
-   — see `docs/decisions/0001-exclude-llama-cpp.md`. The GGUF reader and every
-   dequant kernel are ours. **Name this rule in every subagent brief**: a worker
-   that does not know it will reach for the obvious reference implementation.
-2. **FP8 is excluded as a format**, not demoted. No checkpoint, no reference
-   run, no kernel — see `docs/adr/0004-exclude-fp8.md`.
-3. **This project runs the fullstack loop from PLAN onward.** SPEC, slices as
-   GitHub issues, coder subagents, gated promotion. See
-   `docs/agents/control-plane.md`.
-4. **aiter's ASM/CK path is excluded; Triton is the kernel backend — and Triton compiles
-   straight to gfx1100, not through anyone.** Verified on this box: a Triton 3.8.0 kernel
-   emits `amdgcn` + `hsaco` for `gcnArchName gfx1100` through LLVM's AMDGPU backend, and
-   `layers/attention/triton_backend.py` (118 KB) contains **zero** references to aiter. aiter
-   is a *consumer* of Triton, not a layer under it: its hand-written **MFMA** paged-decode
-   cannot run on RDNA3 (no matrix cores; clang: *needs `mai-insts`*), and the file is rejected
-   by an allow-list with no gfx1100 entry. Its **Triton** subtree does compile — which is
-   Triton anyway. Force the attention backend explicitly: the HIP default is aiter. Evidence:
-   `docs/research/19-aiter-gfx1100.md`, `14-sglang-gfx1100.md:19,42`.
-
-## Principles
-
-The hard rules above are constraints. These are the direction of travel: they decide what
-a *good* change looks like when nothing forbids it. Each is traceable to a record.
-
-**1. Records, never targets.** No number is a goal. A fixed tok/s or GB/s target is a false
-objective — it licenses leaving performance on the table the moment the number is met. The
-objective is **bandwidth efficiency**: achieved GB/s against the measured 776 GB/s wall,
-per shape. The discipline is to break the standing record every time and explain the shape.
-**No shape is the target either.** "B sessions at C context" is a record to keep, not an
-operating point to optimise for, unless the owner has named it — optimise the surface, not a
-point on it (`docs/plan/COST-LEDGER.md`). `docs/plan/RECORD.md` is the ledger;
-`REQUIREMENTS.md` H6/H7 is the rule.
-
-**2. gfx1100-native, one machine.** Every hot path is gfx1100 machine code reached through
-ROCm. No portability layer, no NVIDIA fallback kept "just in case", no abstraction that
-exists to serve another vendor or another card. A branch that exists for hardware we do not
-have is a defect, not insurance. (H5)
-
-**3. The engine is the minimum that runs this model on this box.** Vendored sglang is raw
-material, not a dependency to preserve: strip it to what the decode path and the gate path
-actually touch, delete rather than configure, and make every retained file earn its place.
-**Delete, do not guard** — a `try/except` around a dead dependency keeps it alive and hides the
-next failure. Small and fast beats complete. (H9)
-
-**4. Absent hardware is not a software gap.** This card has no matrix cores and no FP8. Never
-emulate, shim or approximate them, and never measure against hardware that is not here — no
-CDNA comparison, no aiter, no FP8 reference. But where the *hardware* supports something and the
-*software* does not — the GGUF dequant-GEMV exists only as CUDA source that cannot compile on
-gfx1100 — the software is ours to write. That distinction decides every "can we just adapt
-this?" question.
-
-**5. Speculation is core, not an optimisation.** Decode pays one weight sweep per
-*verification step*, so accepted tokens per step divide the per-token cost. Both drafters are
-in scope — the shipped MTP head and the DFlash2 block-diffusion drafter — and the drafter's
-own weight read is part of the per-step budget, never free. (H2)
-
-**6. Parallelise the calculations, not just the requests.** Both cards work on every token
-where the latency budget allows. A shard-native kernel — row/column-parallel plus a reduction
-— is the default shape, so topology is a dispatch decision rather than an architectural fork.
-Replication is the fallback when a reduction cannot be hidden, never the default. (A4)
-
-**7. VRAM is the budget.** The model, the drafter and every KV cache share 19.98 GiB per
-card. Any addition names what it displaces, in GB and in concurrent 32K sessions. Spilling to
-host memory is not a slow path, it is a design failure. (H1)
-
-**8. Measure, then believe.** A number without its baseline in the same artifact is an
-opinion. When a document and a measurement disagree, the measurement wins and the document is
-corrected that turn. (H10)
-
-**9. Gate every probe on a checksum.** A fast wrong kernel is worse than a slow right one: an
-ungated probe once reported 230 % of the wall because the compiler hoisted its loads. No row
-enters a report without a data-dependent checksum replayed on the host.
-
-**10. Validate the instrument before trusting the reading.** Ask the instrument for a known
-quantity first — a canary with a countable answer. A zero from a profiler is a broken counter
-until proven otherwise; on this host `rocprofv3` reads no instruction counter at all.
-
-**11. Reproduce before recording.** Nothing enters `RECORD.md` or the hypothesis ledger without
-an independent reproduction, including anything a subagent reports. Cite the row; never
-re-derive a number from prose.
-
-**12. Correctness is designed, not assumed.** Where a format or kernel claims losslessness,
-greedy output matches the reference exactly; where it does not, the bounded error is stated
-with its tolerance *before* the run. A 32-token match is an arbiter, not the method. (H11)
-
-## Two cards, one machine
-
-Two RX 7900 XT at 19.98 GiB each: **39.96 GiB of VRAM, 2× the compute, 2× the bandwidth**,
-joined by PCIe 4.0 ×16 with **no peer-to-peer DMA**. The goal is to make the pair behave as
-one card that is double in everything.
-
-- **Weights are sharded, never moved.** Tensor parallelism gives each card a permanent half
-  of every tensor. What crosses the link is the partial sums: **128 all-reduces of ~10 KiB
-  per token — 1.3 MB, 52 µs of link time.** The cost is `128 × round-trip latency`, never the
-  bytes. Nobody moves weights across PCIe at inference time; that is a death sentence at any
-  link generation.
-- **TP is what makes one token faster.** At the recorded 20.65 µs round trip, TP=2 turns a
-  15.1 ms/token sweep into 10.2 ms (**1.48×**); at a 2 µs round trip, 7.8 ms (**1.93×** —
-  essentially perfect doubling). DP=2 gives **1.00× on a single stream**: one card does the
-  work and the other idles. It reaches 2.00× only at concurrency ≥ 2.
-- **TP also buys KV capacity.** Sharded weights are ~5.5 GiB per card instead of 11.8, and the
-  KV shards by head, so the pair's KV pool is `VRAM − trunk/2 − drafter` per card. At a 7 GiB
-  pool that is ~6.5 concurrent 32K sessions with no drafter, ~6.0 with the MTP head, ~5.9 with
-  DFlash2 at 4.5 bpw, and ~4.8 with DFlash2 at BF16 — the drafter's precision costs sessions,
-  which is why it must be quantised (`run-artifacts/hypotheses/H-5.md`).
-- **The lever is round-trip latency.** Every microsecond off it is ~0.13 ms off the step,
-  because there are 128 of them. 20.65 µs is a host-mediated path; GPU-publish /
-  pre-launched-acquire is the documented alternative and is the thing to measure.
-- **Build shard-native from the first kernel.** A row/column-parallel GEMV plus a reduction is
-  a dispatch flag, not a rewrite. Topology then becomes a per-operating-point decision — TP
-  for single-stream latency and long context, DP for coupling-free aggregate — instead of an
-  architecture chosen before the measurement exists.
-
-## Sync topology
-
-The Mac clone is the writing surface. It pushes to `origin`, the bare repo
-`rasputin:development/inference-engine-rasputinie.git`; the working tree at
-`rasputin:~/development/inference-engine-rasputinie` **pulls** from it.
-
-```
-Mac clone ──push──> origin (bare, on rasputin) ──pull──> rasputin working tree
+```bash
+ssh rasputin                                                  # port 8374, mattia-bosi, sudo -n
+~/venv/sglang-fork/bin/python                                 # the engine; sglang editable from engine/python
+HIP_VISIBLE_DEVICES=1 GRIDMUL=8 BLK=256 ~/e1/iq3s_valid <manifest> <gguf> 1 4
+python3 ~/e1/mkmanifest.py <gguf> 30 <out>                    # must print "0 mismatches"
+echo high | sudo -n tee /sys/class/drm/card0/device/power_dpm_force_performance_level
 ```
 
-Nothing writes into the host working tree from the Mac directly — no rsync, no
-scp, no editing over SSH. A dirty tree on the host means another session is
-mid-edit; do not pull over it. `github`
-(`HiggsBoson97/inference-engine-rasputinie`, **public** since 2026-10-22) is a
-second remote for issues and review, not part of the sync path. Because it is now
-public, **branch protection is available** — required checks and
-`enforce_admins` can be turned on, so the gate layer no longer has to be pure
-discipline.
+The frontier unit and its proof command live in `docs/status.md`.
 
-## Measurement discipline
+## Map
 
-- Measure before and after every change. A number without a baseline is an
-  opinion.
-- **Any speed number must carry the hash of a passing correctness receipt.** A
-  fast wrong kernel is worse than a slow right one.
-- Every GPU probe needs a **data-dependent checksum** that is replayed on the
-  host. Without one, the compiler will delete your loads and report 230 % of the
-  wall.
-- Aggregate bandwidth results from kernels larger than ~800 MiB per launch: that
-  is a cliff, not a launch cost.
-- Never plan from specifications. Regenerate the hardware facts with
-  `bench/00_hardware_probe.py` when the driver, the ROCm version or the hardware
-  changes.
-- The engine must run on one card first. Two-card support is a mode, not a
-  requirement.
-- Delete NVIDIA code when it blocks a build or confuses a reader, never for its
-  own sake. Speed comes from kernels and data placement.
-
-## Agent skills
-
-### Issue tracker
-
-Issues live as GitHub issues on `HiggsBoson97/inference-engine-rasputinie`, driven
-by `gh`. See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Single-context: numbered `docs/adr/` plus a decision record. A root
-`GLOSSARY.md (removed)` is created with the SPEC, not before. See `docs/agents/domain.md`.
-
-### Build loop
-
-The fullstack loop — **Discovery** (grill → hypotheses → SPEC → slices → rig → plan gate),
-then **Development** (CODE → FINAL → MERGE, then LEARN) — with 2 slice slots. See
-`docs/agents/control-plane.md`.
+| where | what |
+|---|---|
+| `docs/index.md` | the reachable map — start here |
+| `docs/facts/` | **measured**: memory, compute, quant, engine, decoder, twocards, traps |
+| `docs/decisions/` | **decided**: `D-01`…`D-09`, immutable, each with its rejected alternative |
+| `docs/plan/` | `REQUIREMENTS`, `RECORD`, `COST-LEDGER`, `DEVELOPMENT-PLAN`, `TENSOR-INVENTORY` |
+| `docs/status.md` | the frontier unit, its three fields, its last state |
+| `_archive/2026-10-24/` | the pre-migration tree, provenance only — never cite it as current |
